@@ -1,2 +1,2 @@
-pub mod mintZXB;
 pub mod xZBERC20;
+pub mod mint_xZB;
