@@ -2,13 +2,13 @@ use core::starknet::eth_address::EthAddress;
 use starknet::secp256_trait::Signature;
 
 #[starknet::interface]
-pub trait IMintAndClaimZXB<TContractState> {
+pub trait IMintAndClaimxZB<TContractState> {
     fn mint_and_claim_xzb(ref self: TContractState, usd_deposited: u256, msg_hash: u256, eth_address: EthAddress, signature: Signature, r: u256, s: u256, v: u32);
     fn get_signature(self: @TContractState, r: u256, s: u256, v: u32) -> Signature;
 }
 
 #[starknet::contract]
-pub mod MintAndClaimZXB {
+pub mod MintAndClaimxZB {
     use core::num::traits::Zero;
     use core::starknet::eth_address::EthAddress;
     use starknet::{ContractAddress, get_caller_address};
@@ -28,7 +28,7 @@ pub mod MintAndClaimZXB {
     struct Storage {
         #[substorage(v0)]
         erc20: ERC20Component::Storage,
-        pub zxb_contract_address: ContractAddress,
+        pub xzb_contract_address: ContractAddress,
         pub pending_claims: Map<ContractAddress, bool>
     }
 
@@ -37,22 +37,22 @@ pub mod MintAndClaimZXB {
     enum Event {
       #[flat]
       ERC20Event: ERC20Component::Event,
-      ZXBMinted: ZXBMinted,
+      xZBMinted: xZBMinted,
     }
 
     #[derive(starknet::Event, Drop)]
-    pub struct ZXBMinted {
+    pub struct xZBMinted {
         pub user: ContractAddress,
         pub amount: u256,
     }
     #[constructor]
-    fn constructor(ref self: ContractState, zxb_contract_address: ContractAddress) {
-        assert(!zxb_contract_address.is_zero(), 'MVG:VM_ZERO');
-        self.zxb_contract_address.write(zxb_contract_address);
+    fn constructor(ref self: ContractState, xzb_contract_address: ContractAddress) {
+        assert(!xzb_contract_address.is_zero(), 'MVG:VM_ZERO');
+        self.xzb_contract_address.write(xzb_contract_address);
     }
 
     #[abi(embed_v0)]
-    impl MintAndClaimZXBImpl of super::IMintAndClaimZXB<ContractState> {
+    impl MintAndClaimxZBImpl of super::IMintAndClaimxZB<ContractState> {
         fn mint_and_claim_xzb(ref self: ContractState, usd_deposited: u256, msg_hash: u256, eth_address: EthAddress, signature: Signature, r: u256, s: u256, v: u32) {
             assert(usd_deposited > 0, 'Must deposit a positive amount');
             
@@ -70,17 +70,17 @@ pub mod MintAndClaimZXB {
             
             self.pending_claims.write(caller, true);
             
-            let zxb_token = IERC20Dispatcher { contract_address: self.zxb_contract_address.read() };
+            let xzb_token = IERC20Dispatcher { contract_address: self.xzb_contract_address.read() };
             
             // TODO: wait for #6 to be merged
-            // zxb_token.mint(caller, mint_amount);
-            let success = zxb_token.transfer(caller, mint_amount);
+            // xzb_token.mint(caller, mint_amount);
+            let success = xzb_token.transfer(caller, mint_amount);
 
             assert(success, 'Mint failed');
             
             self.pending_claims.write(caller, false);
 
-            self.emit(ZXBMinted { user: caller, amount: mint_amount });
+            self.emit(xZBMinted { user: caller, amount: mint_amount });
         }
 
         fn get_signature(self: @ContractState, r: u256, s: u256, v: u32) -> Signature {
