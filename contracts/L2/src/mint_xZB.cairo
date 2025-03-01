@@ -17,6 +17,7 @@ pub mod MintAndClaimxZB {
     use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::secp256_trait::{Signature, signature_from_vrs};
     use starknet::eth_signature::is_eth_signature_valid;
+    use l2::Dynamicrate::{IDynamicRateDispatcher, IDynamicRateDispatcherTrait};
     
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
 
@@ -29,6 +30,7 @@ pub mod MintAndClaimxZB {
         #[substorage(v0)]
         erc20: ERC20Component::Storage,
         pub xzb_contract_address: ContractAddress,
+        pub dynamic_rate_address: ContractAddress,
         pub pending_claims: Map<ContractAddress, bool>
     }
 
@@ -46,9 +48,11 @@ pub mod MintAndClaimxZB {
         pub amount: u256,
     }
     #[constructor]
-    fn constructor(ref self: ContractState, xzb_contract_address: ContractAddress) {
-        assert(!xzb_contract_address.is_zero(), 'MVG:VM_ZERO');
+    fn constructor(ref self: ContractState, xzb_contract_address: ContractAddress, dynamic_rate_address: ContractAddress) {
+        assert(!xzb_contract_address.is_zero(), 'ZERO_ADDRESS');
+        assert(!dynamic_rate_address.is_zero(), 'ZERO_ADDRESS');
         self.xzb_contract_address.write(xzb_contract_address);
+        self.dynamic_rate_address.write(dynamic_rate_address);
     }
 
     #[abi(embed_v0)]
@@ -65,7 +69,8 @@ pub mod MintAndClaimxZB {
 
             // TODO: Verify proof (wait for #8 to be merged)
 
-            let mint_rate = 1; // TODO: wait for #7 to be merged
+            let dynamic_rate_contract = IDynamicRateDispatcher { contract_address: self.dynamic_rate_address.read() };
+            let mint_rate = dynamic_rate_contract.get_dynamic_rate(usd_deposited);
             let mint_amount = usd_deposited * mint_rate;
             
             self.pending_claims.write(caller, true);
