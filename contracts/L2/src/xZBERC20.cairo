@@ -3,6 +3,24 @@ use starknet::ContractAddress;
 // SPDX-License-Identifier: MIT
 // Compatible with OpenZeppelin Contracts for Cairo ^0.20.0
 
+#[derive(Drop, Copy, Serde, starknet::Store)]
+pub enum ProposalStatus {
+    None,
+    NonBindingPoll,
+    BindingVote,
+    Executed,
+    Failed
+}
+
+#[starknet::interface]
+pub trait ExecutiveAction<TContractState> {
+    fn startBindingVote(
+        ref self: TContractState, 
+        proposal_id: u256, 
+        executive_action: ContractAddress
+    );
+}
+
 #[starknet::interface]
 pub trait IMintable<TContractState> {
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
@@ -46,6 +64,9 @@ pub mod xZBERC20 {
         ownable: OwnableComponent::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
+        proposal_status: LegacyMap::<u256, ProposalStatus>,
+        proposal_actions: LegacyMap::<u256, ContractAddress>,
+        non_binding_threshold: u256,
     }
 
     #[event]
@@ -57,6 +78,13 @@ pub mod xZBERC20 {
         OwnableEvent: OwnableComponent::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
+        BindingVoteStarted: BindingVoteStarted,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct BindingVoteStarted {
+        proposal_id: u256,
+        executive_action: ContractAddress,
     }
 
     #[constructor]
