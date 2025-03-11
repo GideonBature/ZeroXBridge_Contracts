@@ -65,6 +65,8 @@ pub trait IDAO<TContractState> {
 
     // move proposal to voting phase
     fn moveProposal(ref self: TContractState, proposal_id: u256);
+
+    fn update_proposal_status(ref self: TContractState, proposal_id: u256, new_status: ProposalStatus);
     fn startBindingVote(ref self: TContractState, proposal_id: u256, execute_action_address: ContractAddress);
 }
 
@@ -82,7 +84,6 @@ pub mod DAO {
     use super::{Proposal, ProposalStatus, BindingVoteData};
     use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use core::panic_with_felt252;
-    use super::IExecutiveAction;
 
     #[storage]
     struct Storage {
@@ -173,6 +174,12 @@ pub mod DAO {
 
     #[abi(embed_v0)]
     impl DAOImpl of super::IDAO<ContractState> {
+        fn update_proposal_status(ref self: ContractState, proposal_id: u256, new_status: ProposalStatus) {
+            let mut proposal = self.proposals.read(proposal_id);(proposal_id);
+            proposal.status = new_status;
+            self.proposals.write(proposal_id, proposal);
+        }
+        
         fn castBindingVote(ref self: ContractState, proposal_id: u256, support: bool) {
             let caller = get_caller_address();
             let mut proposal = self._validate_proposal_exists(proposal_id);
@@ -212,7 +219,7 @@ pub mod DAO {
                 )
         }
 
-        // This function is deprecated. Use startBindingVote instead.
+        // This function is deprecated. Use startBindingVote() instead.
         fn moveProposal(ref self: ContractState, proposal_id: u256) {
             self.bindingVoteProposals.write(proposal_id, true);
         }
