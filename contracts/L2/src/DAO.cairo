@@ -13,7 +13,7 @@ pub enum ProposalStatus {
     PollActive,
     PollPassed,
     PollFailed,
-    BindingVoteActive, // New status for binding vote phase
+    BindingVoteActive,
     Approved,
     Executed,
     Rejected,
@@ -29,7 +29,7 @@ pub struct Proposal {
     pub voting_end_time: u64,
     pub vote_for: u256,
     pub vote_against: u256,
-    pub status: ProposalStatus, // Use ProposalStatus enum instead of u8
+    pub status: ProposalStatus,
     pub executive_action_address: ContractAddress,
 }
 
@@ -161,7 +161,6 @@ pub mod DAO {
     pub struct BindingVoteStarted {
         #[key]
         pub proposal_id: u256,
-        #[key]
         pub executive_action_address: ContractAddress,
         pub timestamp: u64,
     }
