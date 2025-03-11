@@ -492,34 +492,6 @@ fn test_vote_successfully_emmitted() {
         );
 }
 
-// fn prepare_passed_proposal(dao: ContractAddress, xzb_token: ContractAddress) -> u256 {
-//     let owner = owner();
-    
-//     // Create proposal
-//     create_proposal(dao, 1, 'Test Proposal', 1000, 2000);
-    
-//     // Start poll
-//     let dao_dispatcher = IDAODispatcher { contract_address: dao };
-//     cheat_caller_address(dao, owner, CheatSpan::TargetCalls(1));
-//     dao_dispatcher.start_poll(1);
-    
-//     // Mint tokens to owner for voting
-//     let mintable_dispatcher = IMintableDispatcher { contract_address: xzb_token };
-//     cheat_caller_address(xzb_token, owner, CheatSpan::TargetCalls(1));
-//     mintable_dispatcher.mint(owner, 200.into());
-    
-//     // Vote for the proposal to pass the threshold
-//     cheat_caller_address(dao, owner, CheatSpan::TargetCalls(1));
-//     dao_dispatcher.vote_in_poll(1, true);
-    
-//     // Tally votes to transition to PollPassed
-//     cheat_caller_address(dao, owner, CheatSpan::TargetCalls(1));
-//     dao_dispatcher.tally_poll_votes(1);
-    
-//     // Return the proposal ID
-//     1
-// }
-
 #[test]
 fn test_start_binding_vote_status_transition() {
     // Deploy contracts
