@@ -502,7 +502,7 @@ fn test_start_binding_vote_status_transition() {
     let dao_dispatcher = IDAODispatcher { contract_address: dao };
 
     let executive_action = contract_address_const::<'executor'>();
-    
+
     // Prepare a proposal in PollPassed state
     // let mut proposal = dao_dispatcher.get_proposal(proposal_id);
     // proposal.status = ProposalStatus::PollPassed;
@@ -513,7 +513,7 @@ fn test_start_binding_vote_status_transition() {
     let alice = alice();
     cheat_caller_address(dao, alice, CheatSpan::TargetCalls(1));
     dao_dispatcher.startBindingVote(proposal_id, executive_action);
-    
+
     // Verify status transition
     let proposal = dao_dispatcher.get_proposal(proposal_id);
     assert(proposal.status == ProposalStatus::BindingVoteActive, 'Status not BindingVoteActive');
@@ -530,14 +530,17 @@ fn test_start_binding_vote_executive_action_address_record() {
     let executive_action = contract_address_const::<'executor'>();
     // Prepare a proposal in PollPassed state
     dao_dispatcher.update_proposal_status(proposal_id, ProposalStatus::PollPassed);
-    
+
     // Start binding vote
     cheat_caller_address(dao, owner(), CheatSpan::TargetCalls(1));
     dao_dispatcher.startBindingVote(proposal_id, executive_action);
-    
+
     // Verify executive action address is recorded
     let proposal = dao_dispatcher.get_proposal(proposal_id);
-    assert!(proposal.executive_action_address == executive_action, "Executive action address not recorded");
+    assert!(
+        proposal.executive_action_address == executive_action,
+        "Executive action address not recorded",
+    );
 }
 
 #[test]
@@ -546,33 +549,34 @@ fn test_start_binding_vote_event_emission() {
     let xzb_token = deploy_xzb();
     let dao = deploy_dao(xzb_token);
     let executive_action = contract_address_const::<'executor'>();
-    let proposal_id = 1;    
+    let proposal_id = 1;
 
     create_proposal(dao, proposal_id, 'Test Proposal 1', 1000, 2000);
-   
+
     // Start binding vote and capture events
     let dao_dispatcher = IDAODispatcher { contract_address: dao };
     // Prepare a proposal in PollPassed state
-    dao_dispatcher.update_proposal_status(proposal_id, ProposalStatus::PollPassed); 
+    dao_dispatcher.update_proposal_status(proposal_id, ProposalStatus::PollPassed);
     let mut spy = spy_events();
     cheat_caller_address(dao, owner(), CheatSpan::TargetCalls(1));
     dao_dispatcher.startBindingVote(proposal_id, executive_action);
-    
+
     // Verify event emission
-    spy.assert_emitted(
-        @array![
-            (
-                dao,
-                DAO::Event::BindingVoteStarted(
-                    DAO::BindingVoteStarted {
-                        proposal_id: proposal_id,
-                        executive_action_address: executive_action,
-                        timestamp: get_block_timestamp(),
-                    },
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    dao,
+                    DAO::Event::BindingVoteStarted(
+                        DAO::BindingVoteStarted {
+                            proposal_id: proposal_id,
+                            executive_action_address: executive_action,
+                            timestamp: get_block_timestamp(),
+                        },
+                    ),
                 ),
-            ),
-        ],
-    );
+            ],
+        );
 }
 
 #[test]
@@ -582,7 +586,7 @@ fn test_start_binding_vote_nonexistent_proposal() {
     let xzb_token = deploy_xzb();
     let dao = deploy_dao(xzb_token);
     let executive_action = contract_address_const::<'executor'>();
-    
+
     // Try to start binding vote on nonexistent proposal
     let dao_dispatcher = IDAODispatcher { contract_address: dao };
     cheat_caller_address(dao, owner(), CheatSpan::TargetCalls(1));
@@ -596,10 +600,10 @@ fn test_start_binding_vote_not_passed_poll() {
     let xzb_token = deploy_xzb();
     let dao = deploy_dao(xzb_token);
     let executive_action = contract_address_const::<'executor'>();
-    
+
     // Create proposal but don't pass the poll
     create_proposal(dao, 1, 'Test Proposal', 1000, 2000);
-    
+
     // Try to start binding vote on proposal that hasn't passed poll
     let dao_dispatcher = IDAODispatcher { contract_address: dao };
     cheat_caller_address(dao, owner(), CheatSpan::TargetCalls(1));

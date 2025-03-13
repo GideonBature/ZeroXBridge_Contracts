@@ -66,8 +66,12 @@ pub trait IDAO<TContractState> {
     // move proposal to voting phase
     fn moveProposal(ref self: TContractState, proposal_id: u256);
 
-    fn update_proposal_status(ref self: TContractState, proposal_id: u256, new_status: ProposalStatus);
-    fn startBindingVote(ref self: TContractState, proposal_id: u256, execute_action_address: ContractAddress);
+    fn update_proposal_status(
+        ref self: TContractState, proposal_id: u256, new_status: ProposalStatus,
+    );
+    fn startBindingVote(
+        ref self: TContractState, proposal_id: u256, execute_action_address: ContractAddress,
+    );
 }
 
 #[starknet::contract]
@@ -173,28 +177,26 @@ pub mod DAO {
 
     #[abi(embed_v0)]
     impl DAOImpl of super::IDAO<ContractState> {
-        fn update_proposal_status(ref self: ContractState, proposal_id: u256, new_status: ProposalStatus) {
-            let mut proposal = self.proposals.read(proposal_id);(proposal_id);
+        // for testing purposes only
+        fn update_proposal_status(
+            ref self: ContractState, proposal_id: u256, new_status: ProposalStatus,
+        ) {
+            let mut proposal = self.proposals.read(proposal_id);
             proposal.status = new_status;
             self.proposals.write(proposal_id, proposal);
         }
-        
+
         fn castBindingVote(ref self: ContractState, proposal_id: u256, support: bool) {
             let caller = get_caller_address();
-            let mut proposal = self._validate_proposal_exists(proposal_id);
-            
-            // Check that the proposal is in the binding vote phase
-            assert(proposal.status == ProposalStatus::BindingVoteActive, 'Not in binding vote phase');
-            
             let binding_vote_proposal = self.bindingVoteProposals.read(proposal_id);
             let bindingVoteCasted = self.bindingVoteCasted.read((proposal_id, caller));
-            
+
             assert!(binding_vote_proposal == true, "Proposal not in voting phase");
             assert!(bindingVoteCasted == false, "Binding Vote Already casted");
-            
+
             let vote_weight = self._get_voter_weight(caller);
             assert(vote_weight > 0, 'No voting power');
-            
+
             let oldBindingVotesCountMap = self.bindingVotesCountMap.read(proposal_id);
 
             let newBindingVotesCountMap = self
@@ -398,33 +400,36 @@ pub mod DAO {
             }
         }
 
-        fn startBindingVote(ref self: ContractState, proposal_id: u256, execute_action_address: ContractAddress) {
+        fn startBindingVote(
+            ref self: ContractState, proposal_id: u256, execute_action_address: ContractAddress,
+        ) {
             // Verify proposal eligibility
             let mut proposal = self._validate_proposal_exists(proposal_id);
             assert(proposal.status == ProposalStatus::PollPassed, 'Proposal not in passed state');
-            
+
             // Update proposal status
             proposal.status = ProposalStatus::BindingVoteActive;
-            
+
             // Record executive action address
             proposal.executive_action_address = execute_action_address;
-            
+
             self.proposals.write(proposal_id, proposal);
             self.bindingVoteProposals.write(proposal_id, true);
-            
+
             // Initialize binding vote data for this proposal
             let binding_vote_data = BindingVoteData { votesFor: 0, votesAgainst: 0 };
             self.bindingVotesCountMap.write(proposal_id, binding_vote_data);
- 
-            self.emit(
-                Event::BindingVoteStarted(
-                    BindingVoteStarted {
-                        proposal_id: proposal_id,
-                        executive_action_address: execute_action_address,
-                        timestamp: get_block_timestamp(),
-                    },
-                ),
-            );
+
+            self
+                .emit(
+                    Event::BindingVoteStarted(
+                        BindingVoteStarted {
+                            proposal_id: proposal_id,
+                            executive_action_address: execute_action_address,
+                            timestamp: get_block_timestamp(),
+                        },
+                    ),
+                );
         }
     }
 
