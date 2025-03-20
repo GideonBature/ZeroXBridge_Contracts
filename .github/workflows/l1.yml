@@ -22,9 +22,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Foundry
-        uses: foundry-rs/setup-foundry@v1
+        uses: foundry-rs/foundry-toolchain@v1
         with:
           version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Check Foundry Version
+        run: forge --version
 
       - name: Check Solidity Formatting
         run: cd contracts/L1 && forge fmt --check
@@ -37,9 +40,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Foundry
-        uses: foundry-rs/setup-foundry@v1
+        uses: foundry-rs/foundry-toolchain@v1
         with:
           version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Check Foundry Version
+        run: forge --version
 
       - name: Run Tests
         run: cd contracts/L1 && forge test --gas-report
