@@ -37,13 +37,13 @@ contract ZeroXBridgeL1 is Ownable {
 
     // Track user deposits per token
     mapping(address => mapping(address => uint256)) public userDeposits; // token -> user -> amount
-    
+
     // Track deposit nonces to prevent replay attacks
     mapping(address => uint256) public nextDepositNonce; // user -> next nonce
 
     // Approved relayers that can submit proofs
     mapping(address => bool) public approvedRelayers;
-    
+
     // Whitelisted tokens mapping
     mapping(address => bool) public whitelistedTokens;
 
@@ -60,21 +60,26 @@ contract ZeroXBridgeL1 is Ownable {
     event WhitelistEvent(address indexed token);
     event DewhitelistEvent(address indexed token);
     event DepositEvent(address indexed token, uint256 amount, address indexed user, bytes32 commitmentHash);
-    
-    constructor(address _gpsVerifier, address _admin, uint256 _cairoVerifierId, address _initialOwner, address _claimableToken)
-        Ownable(_initialOwner)
-    {
+
+    constructor(
+        address _gpsVerifier,
+        address _admin,
+        uint256 _cairoVerifierId,
+        address _initialOwner,
+        address _claimableToken
+    ) Ownable(_initialOwner) {
         gpsVerifier = IGpsStatementVerifier(_gpsVerifier);
         cairoVerifierId = _cairoVerifierId;
         claimableToken = IERC20(_claimableToken);
         admin = _admin;
     }
-    modifier  onlyAdmin() {
+
+    modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this action");
-    _;
+        _;
     }
 
-    function addSupportedToken(address token, address priceFeed, uint8 decimals) external {
+    function addSupportedToken(address token, address priceFeed, uint8 decimals) external onlyAdmin {
         supportedTokens.push(token);
         priceFeeds[token] = priceFeed;
         tokenDecimals[token] = decimals;
@@ -177,29 +182,13 @@ contract ZeroXBridgeL1 is Ownable {
     }
 
     /**
-     * @dev Allows users to claim their unlocked funds
-     */
-    function claimFunds() external {
-        uint256 amount = claimableFunds[msg.sender];
-        require(amount > 0, "ZeroXBridge: No funds to claim");
-
-        // Reset claimable amount before transfer to prevent reentrancy
-        claimableFunds[msg.sender] = 0;
-
-        // Transfer funds to user
-        claimableToken.safeTransfer(msg.sender, amount);
-        emit FundsClaimed(msg.sender, amount);
-    }
-
-
-    /**
      * @dev Allows users to claim their full unlocked tokens
      * @notice Users can only claim the full amount, partial claims are not allowed
      */
     function claim_tokens() external {
         uint256 amount = claimableFunds[msg.sender];
         require(amount > 0, "ZeroXBridge: No tokens to claim");
-        
+
         // Reset claimable amount before transfer to prevent reentrancy
         claimableFunds[msg.sender] = 0;
 
@@ -219,7 +208,7 @@ contract ZeroXBridgeL1 is Ownable {
         cairoVerifierId = _newVerifierId;
     }
 
-     function whitelistToken(address _token) public onlyAdmin {
+    function whitelistToken(address _token) public onlyAdmin {
         whitelistedTokens[_token] = true;
         emit WhitelistEvent(_token);
     }
@@ -228,11 +217,11 @@ contract ZeroXBridgeL1 is Ownable {
         whitelistedTokens[_token] = false;
         emit DewhitelistEvent(_token);
     }
-    
+
     function isWhitelisted(address _token) public view returns (bool) {
         return whitelistedTokens[_token];
     }
-    
+
     /**
      * @dev Deposits ERC20 tokens to be bridged to L2
      * @param token The address of the token to deposit
@@ -240,42 +229,30 @@ contract ZeroXBridgeL1 is Ownable {
      * @param user The address that will receive the bridged tokens on L2
      * @return Returns the generated commitment hash for verification on L2
      */
-    function deposit_asset(
-        address token,
-        uint256 amount,
-        address user
-    ) external returns (bytes32) {
+    function deposit_asset(address token, uint256 amount, address user) external returns (bytes32) {
         // Verify token is whitelisted
         require(whitelistedTokens[token], "ZeroXBridge: Token not whitelisted");
         require(amount > 0, "ZeroXBridge: Amount must be greater than zero");
         require(user != address(0), "ZeroXBridge: Invalid user address");
-        
+
         // Get the next nonce for this user
         uint256 nonce = nextDepositNonce[msg.sender];
         // Increment the nonce for replay protection
         nextDepositNonce[msg.sender] = nonce + 1;
-        
+
         // Transfer tokens from user to this contract
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        
+
         // Update user deposits tracking
         userDeposits[token][user] += amount;
-        
+
         // Generate commitment hash for verification on L2
         // Hash includes token address, amount, user address, nonce, and chain ID for uniqueness
-        bytes32 commitmentHash = keccak256(
-            abi.encodePacked(
-                token,
-                amount,
-                user,
-                nonce,
-                block.chainid
-            )
-        );
-        
+        bytes32 commitmentHash = keccak256(abi.encodePacked(token, amount, user, nonce, block.chainid));
+
         // Emit deposit event with all relevant details
         emit DepositEvent(token, amount, user, commitmentHash);
-        
+
         return commitmentHash;
     }
 }

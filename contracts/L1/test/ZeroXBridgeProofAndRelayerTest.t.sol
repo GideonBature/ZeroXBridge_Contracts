@@ -67,7 +67,7 @@ contract ZeroXBridgeTest is Test {
 
     event RelayerStatusChanged(address indexed relayer, bool status);
 
-    event FundsClaimed(address indexed user, uint256 amount);
+    event ClaimEvent(address indexed user, uint256 amount);
 
     function setUp() public {
         vm.startPrank(owner);
@@ -304,11 +304,11 @@ contract ZeroXBridgeTest is Test {
 
         // Expect the FundsClaimed event to be emitted
         vm.expectEmit(true, true, true, true);
-        emit FundsClaimed(user1, amount);
+        emit ClaimEvent(user1, amount);
 
         // User claims the funds
         vm.startPrank(user1);
-        bridge.claimFunds();
+        bridge.claim_tokens();
         vm.stopPrank();
 
         // Assert that the user's claimable funds are now 0
@@ -321,8 +321,8 @@ contract ZeroXBridgeTest is Test {
 
     function testClaimNoFunds() public {
         vm.startPrank(user1);
-        vm.expectRevert("ZeroXBridge: No funds to claim");
-        bridge.claimFunds();
+        vm.expectRevert("ZeroXBridge: No tokens to claim");
+        bridge.claim_tokens();
         vm.stopPrank();
     }
 
@@ -331,12 +331,12 @@ contract ZeroXBridgeTest is Test {
 
         // Claim the funds
         vm.prank(user1);
-        bridge.claimFunds();
+        bridge.claim_tokens();
 
         // Try to claim again, should fail because funds are already claimed
         vm.startPrank(user1);
-        vm.expectRevert("ZeroXBridge: No funds to claim");
-        bridge.claimFunds();
+        vm.expectRevert("ZeroXBridge: No tokens to claim");
+        bridge.claim_tokens();
         vm.stopPrank();
     }
 }

@@ -1,0 +1,45 @@
+name: L1 contracts CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "contracts/L1/**"
+  pull_request:
+    paths:
+      - "contracts/L1/**"
+
+env:
+  FOUNDRY_VERSION: nightly
+
+jobs:
+  l1-fmt:
+    runs-on: ubuntu-latest
+    name: Solidity Formatting
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Foundry
+        uses: foundry-rs/setup-foundry@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Check Solidity Formatting
+        run: cd contracts/L1 && forge fmt --check
+
+  l1-test:
+    runs-on: ubuntu-latest
+    name: Solidity Foundry Tests
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Foundry
+        uses: foundry-rs/setup-foundry@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Run Tests
+        run: cd contracts/L1 && forge test --gas-report
