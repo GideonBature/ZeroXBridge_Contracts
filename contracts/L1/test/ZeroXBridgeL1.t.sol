@@ -465,7 +465,7 @@ contract ZeroXBridgeL1Test is Test {
 
         // User1 deposits for user2
         vm.prank(user1);
-        bytes32 returnedHash = assetPricer.deposit_asset(address(token), depositAmount, user2);
+        assetPricer.deposit_asset(address(token), depositAmount, user2);
 
         // Verify deposit tracking for user2 (not user1)
         assertEq(assetPricer.userDeposits(address(token), user2), depositAmount, "User2's deposit should be tracked");
