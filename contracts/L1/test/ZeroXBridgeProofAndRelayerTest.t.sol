@@ -69,6 +69,8 @@ contract ZeroXBridgeTest is Test {
 
     event ClaimEvent(address indexed user, uint256 amount);
 
+    error OwnableUnauthorizedAccount(address account);
+
     function setUp() public {
         vm.startPrank(owner);
 
@@ -106,17 +108,18 @@ contract ZeroXBridgeTest is Test {
         assertEq(bridge.owner(), owner);
     }
 
-    function testFailNonOwnerFunctions() public {
+    function test_RevertWhen_NonOwnerCallsRestrictedFunctions() public {
         vm.startPrank(user1);
-        vm.expectRevert("Ownable: caller is not the owner");
+
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, user1));
         bridge.setRelayerStatus(relayer, false);
 
-        vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, user1));
         bridge.updateGpsVerifier(address(0));
 
-        vm.expectRevert("Ownable: caller is not the owner");
-
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, user1));
         bridge.updateCairoVerifierId(0);
+
         vm.stopPrank();
     }
 
@@ -209,7 +212,7 @@ contract ZeroXBridgeTest is Test {
         assertTrue(bridge.verifiedProofs(commitmentHash));
     }
 
-    function testFailingProofVerification() public {
+    function test_RevertFailingProofVerification() public {
         uint256 amount = 1 ether;
         uint256 l2TxId = 12345;
         bytes32 commitmentHash = keccak256(abi.encodePacked(uint256(uint160(user1)), amount, l2TxId, block.chainid));
@@ -221,12 +224,7 @@ contract ZeroXBridgeTest is Test {
         // vm.expectRevert("ZeroXBridge: Invalid proof");
         vm.expectRevert(abi.encodePacked("ZeroXBridge: Invalid proof"));
 
-        try bridge.unlock_funds_with_proof(proofParams, proof, user1, amount, l2TxId, commitmentHash) {
-            fail();
-        } catch (bytes memory revertData) {
-            console.log("Revert data:");
-            console.logBytes(revertData);
-        }
+        bridge.unlock_funds_with_proof(proofParams, proof, user1, amount, l2TxId, commitmentHash);
 
         // Verify no funds were added
         assertEq(bridge.claimableFunds(user1), 0);
