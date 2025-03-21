@@ -172,8 +172,8 @@ contract ZeroXBridgeL1Test is Test {
             abi.encode(uint80(1), int256(1 * 10 ** 8), uint256(0), uint256(0), uint80(0))
         );
 
-        // Call update_asset_pricing
-        assetPricer.update_asset_pricing();
+        // Call update_tvl
+        assetPricer.update_tvl();
 
         // Calculate expected TVL (in USD with 18 decimals)
         // ETH: 1 ETH * $2000 = $2000 = 2000e18
@@ -211,8 +211,8 @@ contract ZeroXBridgeL1Test is Test {
             abi.encode(uint80(1), int256(1 * 10 ** 8), uint256(0), uint256(0), uint80(0))
         );
 
-        // Call update_asset_pricing
-        assetPricer.update_asset_pricing();
+        // Call update_tvl
+        assetPricer.update_tvl();
 
         // Expected TVL: 2000e18 (ETH) + 1000e18 (DAI) + 0 (USDC) = 3000e18
         uint256 expectedTvl = 3000 * 10 ** 18;
@@ -248,7 +248,7 @@ contract ZeroXBridgeL1Test is Test {
 
         // Expect revert with the specific message
         vm.expectRevert("No price feed for token");
-        assetPricer.update_asset_pricing();
+        assetPricer.update_tvl();
     }
     /**
      * Test Case 4: Invalid Price - Reverts if a price feed returns zero or negative
@@ -267,7 +267,7 @@ contract ZeroXBridgeL1Test is Test {
 
         // Expect revert
         vm.expectRevert("Invalid price");
-        assetPricer.update_asset_pricing();
+        assetPricer.update_tvl();
     }
 
     function testClaimTokens() public {
@@ -336,8 +336,8 @@ contract ZeroXBridgeL1Test is Test {
             new ZeroXBridgeL1(address(mockVerifier), admin, cairoVerifierId, owner, address(token));
         vm.stopPrank();
 
-        // Call update_asset_pricing
-        newAssetPricer.update_asset_pricing();
+        // Call update_tvl
+        newAssetPricer.update_tvl();
 
         // TVL should be 0
         assertEq(newAssetPricer.tvl(), 0, "TVL should be zero with no supported tokens");

@@ -85,7 +85,7 @@ contract ZeroXBridgeL1 is Ownable {
         tokenDecimals[token] = decimals;
     }
 
-    function update_asset_pricing() external {
+    function fetch_reserve_tvl() public view returns (uint256) {
         uint256 totalValue = 0;
 
         // Iterate through all supported tokens, including ETH
@@ -122,7 +122,11 @@ contract ZeroXBridgeL1 is Ownable {
         }
 
         // Update TVL
-        tvl = totalValue;
+        return totalValue;
+    }
+
+    function update_tvl() external {
+        tvl = fetch_reserve_tvl();
     }
 
     function setRelayerStatus(address relayer, bool status) external onlyOwner {

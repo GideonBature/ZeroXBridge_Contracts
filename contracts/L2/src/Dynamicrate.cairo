@@ -11,7 +11,7 @@ pub trait IDynamicRate<TContractState> {
 }
 
 #[starknet::interface]
-trait IL1Oracle<TContractState> {
+trait IL2Oracle<TContractState> {
     fn get_total_tvl(self: @TContractState) -> u256;
 }
 
@@ -23,7 +23,7 @@ trait IERC20<TContractState> {
 #[starknet::contract]
 pub mod DynamicRate {
     use super::IDynamicRate;
-    use super::{ContractAddress, IL1OracleDispatcher, IL1OracleDispatcherTrait};
+    use super::{ContractAddress, IL2OracleDispatcher, IL2OracleDispatcherTrait};
     use super::{IERC20Dispatcher, IERC20DispatcherTrait};
     use core::starknet::storage::{StoragePointerWriteAccess, StoragePointerReadAccess};
     use starknet::get_caller_address;
@@ -93,7 +93,7 @@ pub mod DynamicRate {
     impl DynamicRateImpl of super::IDynamicRate<ContractState> {
         fn get_dynamic_rate(self: @ContractState, tvl: u256) -> u256 {
             // Get current total TVL from oracle
-            let oracle_dispatcher = IL1OracleDispatcher { contract_address: self.oracle.read() };
+            let oracle_dispatcher = IL2OracleDispatcher { contract_address: self.oracle.read() };
             let total_tvl = oracle_dispatcher.get_total_tvl();
 
             // Calculate new TVL including the incoming deposit
