@@ -660,6 +660,10 @@ fn test_tally_binding_vote_rejected_success() {
     feign_binding_votes(dao_dispatcher, xzb_token, number_of_voters);
 
     dao_dispatcher.tally_binding_votes(proposal_id);
+
+    let proposal = dao_dispatcher.get_proposal(proposal_id);
+    assert(proposal.status == ProposalStatus::Rejected, 'Wrong status');
+
     let expected_event = DAO::Event::BindingVoteResult(
         DAO::BindingVoteResult {
             proposal_id, approved: false, total_for: 500_000, total_against: 500_000,
@@ -684,6 +688,10 @@ fn test_tally_binding_vote_approved_success() {
     feign_binding_votes(dao_dispatcher, xzb_token, number_of_voters);
 
     dao_dispatcher.tally_binding_votes(proposal_id);
+
+    let proposal = dao_dispatcher.get_proposal(proposal_id);
+    assert(proposal.status == ProposalStatus::Approved, 'Wrong status');
+
     let expected_event = DAO::Event::BindingVoteResult(
         DAO::BindingVoteResult {
             proposal_id, approved: true, total_for: 750_000, total_against: 500_000,
