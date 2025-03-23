@@ -102,6 +102,11 @@ contract ZeroXBridgeL1 is Ownable {
         _;
     }
 
+    modifier onlyRegistered() {
+        require(userRecord[msg.sender] != 0, "ZeroXBridge: User not registered");
+        _;
+    }
+
     function addSupportedToken(
         address token,
         address priceFeed,
@@ -241,7 +246,7 @@ contract ZeroXBridgeL1 is Ownable {
      * @dev Allows users to claim their full unlocked tokens
      * @notice Users can only claim the full amount, partial claims are not allowed
      */
-    function claim_tokens() external {
+    function claim_tokens() external onlyRegistered {
         uint256 amount = claimableFunds[msg.sender];
         require(amount > 0, "ZeroXBridge: No tokens to claim");
 
@@ -289,7 +294,7 @@ contract ZeroXBridgeL1 is Ownable {
         address token,
         uint256 amount,
         address user
-    ) external returns (bytes32) {
+    ) external onlyRegistered returns (bytes32) {
         // Verify token is whitelisted
         require(whitelistedTokens[token], "ZeroXBridge: Token not whitelisted");
         require(amount > 0, "ZeroXBridge: Amount must be greater than zero");
