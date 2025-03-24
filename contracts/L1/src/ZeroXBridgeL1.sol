@@ -52,11 +52,8 @@ contract ZeroXBridgeL1 is Ownable {
     mapping(address => uint256) public userRecord;
 
     //Starknet curve constants
-    uint256 private constant ALPHA = 1;
-    uint256 private constant BETA =
-        3141592653589793238462643383279502884197169399375105820974944592307816406665;
-    uint256 private constant P =
-        3618502788666131213697322783095070105623107215331596699973092056135872020481;
+    uint256 private constant K_BETA = 0x6f21413efbe40de150e596d72f7a8c5609ad26c15c915c1f4cdfcb99cee9e89;
+    uint256 private constant K_MODULUS = 0x800000000000011000000000000000000000000000000000000000000000001;
 
     // Cairo program hash that corresponds to the burn verification program
     uint256 public cairoVerifierId;
@@ -348,18 +345,21 @@ contract ZeroXBridgeL1 is Ownable {
      *@param starknetPubKey user starknet public key
      * @return isValid True if the key is valid.
      */
-    function isValidStarknetPublicKey(uint256 starknetPubKey) internal pure returns(bool) {
-        //extract x and y coordinates
-        uint256 x = starknetPubKey >> 128;
-        uint256 y = starknetPubKey & ((1 << 128) - 1);
+    function isValidStarknetPublicKey(uint256 starknetPubKey) internal view returns(bool) {
+       uint256 xCubed = mulmod(mulmod(starknetPubKey, starknetPubKey, K_MODULUS), starknetPubKey, K_MODULUS);
+       return isQuadraticResidue(addmod(addmod(xCubed, starknetPubKey, K_MODULUS), K_BETA, K_MODULUS));
+    }
 
-        // Compute LHS: y^2 mod P
-        uint256 lhs = mulmod(y, y, P);
+    function fieldPow(uint256 base, uint256 exponent) internal view returns(uint256) {
+        (bool success, bytes memory returndata) = address(5).staticcall(
+            abi.encode(0x20, 0x20, 0x20, base, exponent, K_MODULUS)
+        );
+        require(success, string(returndata));
+        return abi.decode(returndata, (uint256));
+    }
 
-        // Compute RHS: (x^3 + αx + β) mod P
-        uint256 rhs = addmod(addmod(mulmod(x, mulmod(x, x, P), P), mulmod(ALPHA, x, P), P), BETA, P);
-
-        return lhs == rhs;
+    function isQuadraticResidue(uint256 fieldElement) private view returns(bool) {
+        return 1 == fieldPow(fieldElement, ((K_MODULUS - 1) / 2));
     }
 
     /**
@@ -371,11 +371,10 @@ contract ZeroXBridgeL1 is Ownable {
     */
     function recoverSigner(address ethAddress, bytes calldata signature, uint256 starknetPubKey) internal pure returns(address) {
         require(ethAddress != address(0), "Invalid ethAddress");
+        require(signature.length == 65, "Invalid signature length");
 
         bytes32 messageHash = keccak256(abi.encodePacked("UserRegistration", ethAddress, starknetPubKey));
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
 
-        require(signature.length == 65, "Invalid signature length");
 
         bytes memory sig = signature;
         bytes32 r;
@@ -386,6 +385,6 @@ contract ZeroXBridgeL1 is Ownable {
             s := mload(add(sig, 64))
         }
 
-        return ecrecover(ethSignedMessageHash, v, r, s);
+        return ecrecover(messageHash, v, r, s);
     }
 }
