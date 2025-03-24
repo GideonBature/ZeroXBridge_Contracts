@@ -274,15 +274,15 @@ contract ZeroXBridgeL1Test is Test {
     }
 
     function registerUser(address user, uint256 starknetPubKey, uint256 ethAccountPrivateKey) internal {
-    bytes32 digest = keccak256(abi.encodePacked("UserRegistration", user, starknetPubKey));
+        bytes32 digest = keccak256(abi.encodePacked("UserRegistration", user, starknetPubKey));
 
-    // vm.startPrank(user);
-    (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
-    bytes memory signature = abi.encodePacked(r, s, v);
+        // vm.startPrank(user);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
 
-    assetPricer.registerUser(signature, starknetPubKey);
-    // vm.stopPrank();
-}
+        assetPricer.registerUser(signature, starknetPubKey);
+        // vm.stopPrank();
+    }
 
     function testRegisterUser() public {
         address user = 0xfc36a8C3f3FEC3217fa8bba11d2d5134e0354316;
@@ -607,7 +607,7 @@ contract ZeroXBridgeL1Test is Test {
 
         vm.prank(user_1);
         registerUser(user_1, starknetPubKey, ethAccountPrivateKey);
-        
+
         // Setup - whitelist the token for deposits
         vm.prank(admin);
         assetPricer.whitelistToken(address(token));

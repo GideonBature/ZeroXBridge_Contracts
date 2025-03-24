@@ -63,22 +63,13 @@ contract ZeroXBridgeL1 is Ownable {
     using ECDSA for bytes32;
 
     // Events
-    event FundsUnlocked(
-        address indexed user,
-        uint256 amount,
-        bytes32 commitmentHash
-    );
+    event FundsUnlocked(address indexed user, uint256 amount, bytes32 commitmentHash);
     event RelayerStatusChanged(address indexed relayer, bool status);
     event FundsClaimed(address indexed user, uint256 amount);
     event ClaimEvent(address indexed user, uint256 amount);
     event WhitelistEvent(address indexed token);
     event DewhitelistEvent(address indexed token);
-    event DepositEvent(
-        address indexed token,
-        uint256 amount,
-        address indexed user,
-        bytes32 commitmentHash
-    );
+    event DepositEvent(address indexed token, uint256 amount, address indexed user, bytes32 commitmentHash);
     event UserRegistered(address indexed user, uint256 starknetPubKey);
 
     constructor(
@@ -104,11 +95,7 @@ contract ZeroXBridgeL1 is Ownable {
         _;
     }
 
-    function addSupportedToken(
-        address token,
-        address priceFeed,
-        uint8 decimals
-    ) external onlyAdmin {
+    function addSupportedToken(address token, address priceFeed, uint8 decimals) external onlyAdmin {
         supportedTokens.push(token);
         priceFeeds[token] = priceFeed;
         tokenDecimals[token] = decimals;
@@ -137,10 +124,8 @@ contract ZeroXBridgeL1 is Ownable {
             // Fetch price from Chainlink price feed
             address feedAddress = priceFeeds[tokenAddress];
             require(feedAddress != address(0), "No price feed for token");
-            AggregatorV3Interface priceFeed = AggregatorV3Interface(
-                feedAddress
-            );
-            (, int256 priceInt, , , ) = priceFeed.latestRoundData();
+            AggregatorV3Interface priceFeed = AggregatorV3Interface(feedAddress);
+            (, int256 priceInt,,,) = priceFeed.latestRoundData();
             require(priceInt > 0, "Invalid price");
             price = uint256(priceInt); // Price in USD with 8 decimals
 
@@ -181,25 +166,13 @@ contract ZeroXBridgeL1 is Ownable {
         uint256 l2TxId,
         bytes32 commitmentHash
     ) external {
-        require(
-            approvedRelayers[msg.sender],
-            "ZeroXBridge: Only approved relayers can submit proofs"
-        );
+        require(approvedRelayers[msg.sender], "ZeroXBridge: Only approved relayers can submit proofs");
 
         // Verify that commitmentHash matches expected format based on L2 standards
-        bytes32 expectedCommitmentHash = keccak256(
-            abi.encodePacked(
-                uint256(uint160(user)),
-                amount,
-                l2TxId,
-                block.chainid
-            )
-        );
+        bytes32 expectedCommitmentHash =
+            keccak256(abi.encodePacked(uint256(uint160(user)), amount, l2TxId, block.chainid));
 
-        require(
-            commitmentHash == expectedCommitmentHash,
-            "ZeroXBridge: Invalid commitment hash"
-        );
+        require(commitmentHash == expectedCommitmentHash, "ZeroXBridge: Invalid commitment hash");
 
         // Create the public inputs array with all verification parameters
         uint256[] memory publicInputs = new uint256[](4);
@@ -210,25 +183,14 @@ contract ZeroXBridgeL1 is Ownable {
 
         // Check that this proof hasn't been used before
         bytes32 proofHash = keccak256(abi.encodePacked(proof));
-        require(
-            !verifiedProofs[proofHash],
-            "ZeroXBridge: Proof has already been used"
-        );
+        require(!verifiedProofs[proofHash], "ZeroXBridge: Proof has already been used");
 
         // Verify the proof using Starknet's verifier
-        bool isValid = gpsVerifier.verifyProofAndRegister(
-            proofParams,
-            proof,
-            publicInputs,
-            cairoVerifierId
-        );
+        bool isValid = gpsVerifier.verifyProofAndRegister(proofParams, proof, publicInputs, cairoVerifierId);
 
         require(isValid, "ZeroXBridge: Invalid proof");
 
-        require(
-            !verifiedProofs[commitmentHash],
-            "ZeroXBridge: Commitment already processed"
-        );
+        require(!verifiedProofs[commitmentHash], "ZeroXBridge: Commitment already processed");
         verifiedProofs[commitmentHash] = true;
 
         // Store the proof hash to prevent replay attacks
@@ -287,11 +249,7 @@ contract ZeroXBridgeL1 is Ownable {
      * @param user The address that will receive the bridged tokens on L2
      * @return Returns the generated commitment hash for verification on L2
      */
-    function deposit_asset(
-        address token,
-        uint256 amount,
-        address user
-    ) external onlyRegistered returns (bytes32) {
+    function deposit_asset(address token, uint256 amount, address user) external onlyRegistered returns (bytes32) {
         // Verify token is whitelisted
         require(whitelistedTokens[token], "ZeroXBridge: Token not whitelisted");
         require(amount > 0, "ZeroXBridge: Amount must be greater than zero");
@@ -310,9 +268,7 @@ contract ZeroXBridgeL1 is Ownable {
 
         // Generate commitment hash for verification on L2
         // Hash includes token address, amount, user address, nonce, and chain ID for uniqueness
-        bytes32 commitmentHash = keccak256(
-            abi.encodePacked(token, amount, user, nonce, block.chainid)
-        );
+        bytes32 commitmentHash = keccak256(abi.encodePacked(token, amount, user, nonce, block.chainid));
 
         // Emit deposit event with all relevant details
         emit DepositEvent(token, amount, user, commitmentHash);
@@ -321,17 +277,13 @@ contract ZeroXBridgeL1 is Ownable {
     }
 
     /**
-     *@dev Using Starknet Curve constants (α and β) for y^2 = x^3 + α.x + β (mod P)
-     *@param signature The user signature
-     *@param starknetPubKey user starknet public key
+     * @dev Using Starknet Curve constants (α and β) for y^2 = x^3 + α.x + β (mod P)
+     * @param signature The user signature
+     * @param starknetPubKey user starknet public key
      */
-
-    function registerUser(
-        bytes calldata signature,
-        uint256 starknetPubKey
-    ) external {
+    function registerUser(bytes calldata signature, uint256 starknetPubKey) external {
         require(isValidStarknetPublicKey(starknetPubKey), "ZeroXBridge: Invalid Starknet public key");
-        
+
         address recoveredSigner = recoverSigner(msg.sender, signature, starknetPubKey);
         require(recoveredSigner == msg.sender, "ZeroXBridge: Invalid signature");
 
@@ -342,39 +294,41 @@ contract ZeroXBridgeL1 is Ownable {
 
     /**
      * @notice Checks if a Starknet public key belongs to the Starknet elliptic curve.
-     *@param starknetPubKey user starknet public key
+     * @param starknetPubKey user starknet public key
      * @return isValid True if the key is valid.
      */
-    function isValidStarknetPublicKey(uint256 starknetPubKey) internal view returns(bool) {
-       uint256 xCubed = mulmod(mulmod(starknetPubKey, starknetPubKey, K_MODULUS), starknetPubKey, K_MODULUS);
-       return isQuadraticResidue(addmod(addmod(xCubed, starknetPubKey, K_MODULUS), K_BETA, K_MODULUS));
+    function isValidStarknetPublicKey(uint256 starknetPubKey) internal view returns (bool) {
+        uint256 xCubed = mulmod(mulmod(starknetPubKey, starknetPubKey, K_MODULUS), starknetPubKey, K_MODULUS);
+        return isQuadraticResidue(addmod(addmod(xCubed, starknetPubKey, K_MODULUS), K_BETA, K_MODULUS));
     }
 
-    function fieldPow(uint256 base, uint256 exponent) internal view returns(uint256) {
-        (bool success, bytes memory returndata) = address(5).staticcall(
-            abi.encode(0x20, 0x20, 0x20, base, exponent, K_MODULUS)
-        );
+    function fieldPow(uint256 base, uint256 exponent) internal view returns (uint256) {
+        (bool success, bytes memory returndata) =
+            address(5).staticcall(abi.encode(0x20, 0x20, 0x20, base, exponent, K_MODULUS));
         require(success, string(returndata));
         return abi.decode(returndata, (uint256));
     }
 
-    function isQuadraticResidue(uint256 fieldElement) private view returns(bool) {
+    function isQuadraticResidue(uint256 fieldElement) private view returns (bool) {
         return 1 == fieldPow(fieldElement, ((K_MODULUS - 1) / 2));
     }
 
     /**
-    * @dev Recovers the signer's address from a signature.
-    * @param ethAddress The Ethereum address of the user.
-    * @param signature The user's signature.
-    * @param starknetPubKey The Starknet public key.
-    * @return The recovered Ethereum address.
-    */
-    function recoverSigner(address ethAddress, bytes calldata signature, uint256 starknetPubKey) internal pure returns(address) {
+     * @dev Recovers the signer's address from a signature.
+     * @param ethAddress The Ethereum address of the user.
+     * @param signature The user's signature.
+     * @param starknetPubKey The Starknet public key.
+     * @return The recovered Ethereum address.
+     */
+    function recoverSigner(address ethAddress, bytes calldata signature, uint256 starknetPubKey)
+        internal
+        pure
+        returns (address)
+    {
         require(ethAddress != address(0), "Invalid ethAddress");
         require(signature.length == 65, "Invalid signature length");
 
         bytes32 messageHash = keccak256(abi.encodePacked("UserRegistration", ethAddress, starknetPubKey));
-
 
         bytes memory sig = signature;
         bytes32 r;
