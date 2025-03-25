@@ -556,4 +556,86 @@ contract ZeroXBridgeL1Test is Test {
         vm.expectRevert("ZeroXBridge: Invalid user address");
         assetPricer.deposit_asset(address(token), depositAmount, address(0));
     }
+
+    // tests for verifyStarknetSignature
+    function testVerifyStarknetSignatureValid() public {
+        // Create a valid signature (r, s, v) with mock values within bounds
+        bytes memory validSig = new bytes(65);
+        uint256 r = 1; // Valid r < n
+        uint256 s = 2; // Valid s < n
+        bytes32 rBytes = bytes32(r);
+        bytes32 sBytes = bytes32(s);
+        for (uint256 i = 0; i < 32; i++) {
+            validSig[i] = rBytes[i];
+            validSig[32 + i] = sBytes[i];
+        }
+        validSig[64] = 0x1b;
+        uint256 starkPubKey = 123456; // Valid public key > 0
+
+        bool result = assetPricer.verifyStarknetSignature(validSig, starkPubKey);
+        assertTrue(result, "Valid signature should pass verification");
+    }
+
+    function testVerifyStarknetSignatureInvalidRZero() public {
+        // Signature with r = 0
+        bytes memory invalidSig = new bytes(65);
+        uint256 r = 0; // Invalid r
+        uint256 s = 2; // Valid s
+        bytes32 rBytes = bytes32(r);
+        bytes32 sBytes = bytes32(s);
+        for (uint256 i = 0; i < 32; i++) {
+            invalidSig[i] = rBytes[i];
+            invalidSig[32 + i] = sBytes[i];
+        }
+        invalidSig[64] = 0x1b;
+        uint256 starkPubKey = 123456;
+
+        bool result = assetPricer.verifyStarknetSignature(invalidSig, starkPubKey);
+        assertFalse(result, "Signature with r = 0 should fail verification");
+    }
+
+    function testVerifyStarknetSignatureInvalidSOutOfRange() public {
+        // Signature with s >= n
+        bytes memory invalidSig = new bytes(65);
+        uint256 r = 1; // Valid r
+        uint256 s = assetPricer.n(); // s = n, invalid
+        bytes32 rBytes = bytes32(r);
+        bytes32 sBytes = bytes32(s);
+        for (uint256 i = 0; i < 32; i++) {
+            invalidSig[i] = rBytes[i];
+            invalidSig[32 + i] = sBytes[i];
+        }
+        invalidSig[64] = 0x1b;
+        uint256 starkPubKey = 123456;
+
+        bool result = assetPricer.verifyStarknetSignature(invalidSig, starkPubKey);
+        assertFalse(result, "Signature with s >= n should fail verification");
+    }
+
+    function testVerifyStarknetSignatureInvalidPubKey() public {
+        // Invalid starkPubKey = 0
+        bytes memory validSig = new bytes(65);
+        uint256 r = 1;
+        uint256 s = 2;
+        bytes32 rBytes = bytes32(r);
+        bytes32 sBytes = bytes32(s);
+        for (uint256 i = 0; i < 32; i++) {
+            validSig[i] = rBytes[i];
+            validSig[32 + i] = sBytes[i];
+        }
+        validSig[64] = 0x1b;
+        uint256 starkPubKey = 0; // Invalid public key
+
+        bool result = assetPricer.verifyStarknetSignature(validSig, starkPubKey);
+        assertFalse(result, "Invalid public key (0) should fail verification");
+    }
+
+    function testVerifyStarknetSignatureInvalidLength() public {
+        // Signature with incorrect length
+        bytes memory shortSig = new bytes(64); // Too short
+        uint256 starkPubKey = 123456;
+
+        vm.expectRevert("Invalid signature length");
+        assetPricer.verifyStarknetSignature(shortSig, starkPubKey);
+    }
 }

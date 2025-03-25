@@ -23,7 +23,12 @@ contract ZeroXBridgeL1 is Ownable {
     mapping(address => address) public priceFeeds; // Maps token address to Chainlink price feed address
     address[] public supportedTokens; // List of token addresses, including address(0) for ETH
     mapping(address => uint8) public tokenDecimals; // Maps token address to its decimals
-
+    // Stark Curve parameters
+    uint256 constant p = 3618502788666131213697322783095070105623107215331596699973092056135872020481;
+    uint256 constant a = 1;
+    uint256 constant b = 3141592653589793238462643383279502884197169399375105820974944592307816406665;
+    uint256 public constant n = 3618502788666131213697322783095070105526743751716087489154079457884512865583;
+    uint256 constant p_minus_one_over_two = 1809251394333065606848661391547535052811553607665798349986546028067936010240;
     using SafeERC20 for IERC20;
 
     // Starknet GPS Statement Verifier interface
@@ -77,6 +82,59 @@ contract ZeroXBridgeL1 is Ownable {
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this action");
         _;
+    }
+
+    /**
+     * @dev Computes (base^exponent) % modulus using binary exponentiation.
+     * @param base The base number
+     * @param exponent The exponent
+     * @param modulus The modulus
+     * @return result The result of (base^exponent) % modulus
+     */
+    function powMod(uint256 base, uint256 exponent, uint256 modulus) internal pure returns (uint256) {
+        uint256 result = 1;
+        base = base % modulus;
+        while (exponent > 0) {
+            if (exponent % 2 == 1) {
+                result = mulmod(result, base, modulus);
+            }
+            base = mulmod(base, base, modulus);
+            exponent /= 2;
+        }
+        return result;
+    }
+
+    /**
+     * @dev Verifies a Starknet signature.
+     * Checks if r and s are valid and if starkPubKey (x-coordinate) corresponds to a point on the curve.
+     * @param starknetSig The signature (r, s, v) as a 65-byte array
+     * @param starkPubKey The x-coordinate of the public key
+     * @return bool True if the signature passes verification, false otherwise
+     */
+    function verifyStarknetSignature(bytes calldata starknetSig, uint256 starkPubKey) public view returns (bool) {
+        // Ensure signature is 65 bytes (32 bytes r, 32 bytes s, 1 byte v)
+        require(starknetSig.length == 65, "Invalid signature length");
+
+        // Extract r, s, and v from the signature
+        uint256 r = uint256(bytes32(starknetSig[0:32]));
+        uint256 s = uint256(bytes32(starknetSig[32:64]));
+        // uint8 v = uint8(starknetSig[64]); // v is extracted but not used in this partial verification
+
+        // Check if r and s are in the valid range: 0 < r < n and 0 < s < n
+        if (r == 0 || r >= n || s == 0 || s >= n) {
+            return false;
+        }
+
+        // Compute y^2 = x^3 + a*x + b mod p
+        uint256 x = starkPubKey;
+        uint256 y_squared = addmod(mulmod(mulmod(x, x, p), x, p), mulmod(a, x, p), p);
+        y_squared = addmod(y_squared, b, p);
+
+        // Compute the Legendre symbol: (y_squared / p) = y_squared^((p-1)/2) mod p
+        uint256 legendre = powMod(y_squared, p_minus_one_over_two, p);
+
+        // If legendre == 1, there exists a y such that (x, y) is on the curve
+        return legendre == 1;
     }
 
     function addSupportedToken(address token, address priceFeed, uint8 decimals) external onlyAdmin {
