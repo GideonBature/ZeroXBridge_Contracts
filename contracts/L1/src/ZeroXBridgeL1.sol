@@ -333,7 +333,11 @@ contract ZeroXBridgeL1 is Ownable {
             assetType == AssetType.ETH || assetType == AssetType.ERC20,
             "Invalid asset type"
         );
-        require(tokenAddress != address(0), "Invalid token address");
+   if (assetType == AssetType.ETH) {
+       require(tokenAddress == address(0), "Invalid token address for ETH");
+   } else {
+       require(tokenAddress != address(0), "Invalid token address for ERC20");
+   }
         require(tokenRegistry[assetKey].isRegistered, "Token not registered");
 
         return tokenRegistry[assetKey];
