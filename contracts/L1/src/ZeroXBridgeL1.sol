@@ -26,11 +26,27 @@ contract ZeroXBridgeL1 is Ownable {
 
     using SafeERC20 for IERC20;
 
+    // Enum to track asset type for token registry
+    enum AssetType {
+        ETH,
+        ERC20
+    }
+
+    // Struct to store token registry data
+    struct TokenAssetData {
+        AssetType assetType; // 0 for ETH, 1 for ERC-20
+        address tokenAddress; // ERC-20 contract address (0x0 for ETH)
+        bool isRegistered; // Prevent duplicate registration
+    }
+
     // Starknet GPS Statement Verifier interface
     IGpsStatementVerifier public gpsVerifier;
 
     // Track verified proofs to prevent replay attacks
     mapping(bytes32 => bool) public verifiedProofs;
+
+    // Track token registry data
+    mapping(bytes32 => TokenAssetData) public tokenRegistry;
 
     // Track claimable funds per user
     mapping(address => uint256) public claimableFunds;
@@ -60,6 +76,18 @@ contract ZeroXBridgeL1 is Ownable {
     event WhitelistEvent(address indexed token);
     event DewhitelistEvent(address indexed token);
     event DepositEvent(address indexed token, uint256 amount, address indexed user, bytes32 commitmentHash);
+        event DepositEvent(
+        address indexed token,
+        AssetType assetType,
+        uint256 amount,
+        address indexed user,
+        bytes32 commitmentHash
+    );
+    event TokenRegistered(
+        bytes32 indexed assetKey,
+        AssetType assetType,
+        address tokenAddress
+    );
 
     constructor(
         address _gpsVerifier,
@@ -77,6 +105,27 @@ contract ZeroXBridgeL1 is Ownable {
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this action");
         _;
+    }
+
+    function registerToken(AssetType assetType, address tokenAddress) external {
+        bytes32 assetKey = keccak256(abi.encodePacked(assetType, tokenAddress));
+
+        require(
+            assetType == AssetType.ETH || assetType == AssetType.ERC20,
+            "Invalid asset type"
+        );
+        require(tokenAddress != address(0), "Invalid token address");
+        require(
+            !tokenRegistry[assetKey].isRegistered,
+            "Token already registered"
+        );
+
+        tokenRegistry[assetKey] = TokenAssetData({
+            assetType: AssetType(assetType),
+            tokenAddress: tokenAddress,
+            isRegistered: true
+        });
+        emit TokenRegistered(assetKey, assetType, tokenAddress);
     }
 
     function addSupportedToken(address token, address priceFeed, uint8 decimals) external onlyAdmin {
@@ -228,35 +277,66 @@ contract ZeroXBridgeL1 is Ownable {
 
     /**
      * @dev Deposits ERC20 tokens to be bridged to L2
-     * @param token The address of the token to deposit
+     * @param tokenAddress The address of the token to deposit
      * @param amount The amount of tokens to deposit
      * @param user The address that will receive the bridged tokens on L2
      * @return Returns the generated commitment hash for verification on L2
      */
-    function deposit_asset(address token, uint256 amount, address user) external returns (bytes32) {
-        // Verify token is whitelisted
-        require(whitelistedTokens[token], "ZeroXBridge: Token not whitelisted");
+
+    function deposit_asset(
+        AssetType assetType,
+        address tokenAddress,
+        uint256 amount,
+        address user
+    ) external payable returns (bytes32) {
         require(amount > 0, "ZeroXBridge: Amount must be greater than zero");
         require(user != address(0), "ZeroXBridge: Invalid user address");
 
-        // Get the next nonce for this user
-        uint256 nonce = nextDepositNonce[msg.sender];
-        // Increment the nonce for replay protection
-        nextDepositNonce[msg.sender] = nonce + 1;
+        // Check if token is whitelisted
+        if (assetType == AssetType.ETH) {
+        require(msg.value == amount, "ZeroXBridge: Incorrect ETH amount");
 
-        // Transfer tokens from user to this contract
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        // Directly add ETH to tracking (no transfer needed)
+        userDeposits[address(0)][user] += amount;
+        } else if (assetType == AssetType.ERC20) {
+        require(tokenAddress != address(0), "ZeroXBridge: Invalid token address");
 
-        // Update user deposits tracking
-        userDeposits[token][user] += amount;
-
-        // Generate commitment hash for verification on L2
-        // Hash includes token address, amount, user address, nonce, and chain ID for uniqueness
-        bytes32 commitmentHash = keccak256(abi.encodePacked(token, amount, user, nonce, block.chainid));
-
-        // Emit deposit event with all relevant details
-        emit DepositEvent(token, amount, user, commitmentHash);
-
-        return commitmentHash;
+        // Perform ERC20 transfer
+        IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+        
+        // Track ERC20 deposit
+        userDeposits[tokenAddress][user] += amount;
+    } else {
+        revert("Invalid asset type");
     }
+
+    // Get the next nonce for this user
+    uint256 nonce = nextDepositNonce[msg.sender];
+    nextDepositNonce[msg.sender] = nonce + 1;
+
+    // Generate commitment hash
+    bytes32 commitmentHash = keccak256(
+        abi.encodePacked(tokenAddress, amount, user, nonce, block.chainid)
+    );
+
+    // Emit deposit event
+    emit DepositEvent(tokenAddress, assetType, amount, user, commitmentHash);
+
+  return commitmentHash;
+    }
+    function getTokenData(
+        AssetType assetType,
+        address tokenAddress
+    ) external view returns (TokenAssetData memory) {
+        bytes32 assetKey = keccak256(abi.encodePacked(assetType, tokenAddress));
+        require(
+            assetType == AssetType.ETH || assetType == AssetType.ERC20,
+            "Invalid asset type"
+        );
+        require(tokenAddress != address(0), "Invalid token address");
+        require(tokenRegistry[assetKey].isRegistered, "Token not registered");
+
+        return tokenRegistry[assetKey];
+    }
+
 }

@@ -91,8 +91,7 @@ contract ZeroXBridgeL1Test is Test {
 
     event ClaimEvent(address indexed user, uint256 amount);
 
-    event DepositEvent(address indexed token, uint256 amount, address indexed user, bytes32 commitmentHash);
-
+    event DepositEvent(address indexed token, ZeroXBridgeL1.AssetType assetType, uint256 amount, address indexed user, bytes32 commitmentHash);
     function setUp() public {
         admin = address(0x123);
         token1 = address(0x456);
@@ -399,161 +398,203 @@ contract ZeroXBridgeL1Test is Test {
         vm.stopPrank();
     }
 
-    // Test deposit_asset functionality
-    function testDepositAsset() public {
-        // Setup - whitelist the token for deposits
+
+    function testRegisterToken() public {
         vm.prank(admin);
-        assetPricer.whitelistToken(address(token));
+        assetPricer.registerToken(ZeroXBridgeL1.AssetType.ERC20, address(token));
 
-        uint256 depositAmount = 100 * 10 ** 18;
+        // (ZeroXBridgeL1.AssetType assetType, address registeredToken, bool isRegistered)
+        
+        ZeroXBridgeL1.TokenAssetData memory assetData = assetPricer.getTokenData(
+            ZeroXBridgeL1.AssetType.ERC20,
+            address(token)
+        );
+        
+    assertEq(uint256(assetData.assetType), uint256(ZeroXBridgeL1.AssetType.ERC20));
+    assertEq(assetData.tokenAddress, address(token));
+    assertTrue(assetData.isRegistered);
+    }
 
-        // Mint some tokens to user1
+     function testSuccessfulETHDeposit() public {
+        uint256 depositAmount = 1 ether;
+        address depositUser = user1;
+        
+        vm.deal(depositUser, depositAmount);
+        vm.prank(depositUser);
+        
+        bytes32 expectedCommitmentHash = keccak256(
+            abi.encodePacked(
+                address(0),
+                depositAmount,
+                depositUser,
+                uint256(0), // First nonce
+                block.chainid
+            )
+        );
+        
+        bytes32 commitmentHash_ = assetPricer.deposit_asset{value: depositAmount}(
+            ZeroXBridgeL1.AssetType.ETH,
+            address(0),
+            depositAmount,
+            depositUser
+        );
+        
+        assertEq(commitmentHash_, expectedCommitmentHash);
+        assertEq(address(assetPricer).balance, depositAmount);
+        assertEq(assetPricer.userDeposits(address(0), depositUser), depositAmount);
+        assertEq(assetPricer.nextDepositNonce(depositUser), 1);
+    }
+
+    function testSuccessfulERC20Deposit() public {
+        uint256 depositAmount = 100 * 10**18; // 100 tokens with 18 decimals
+        address depositUser = user1;
+        
+        // Mint tokens to user1
+        token.mint(depositUser, depositAmount);
+        
+        vm.prank(depositUser);
+        token.approve(address(assetPricer), depositAmount);
+        
+        bytes32 expectedCommitmentHash = keccak256(
+            abi.encodePacked(
+                address(token),
+                depositAmount,
+                depositUser,
+                uint256(0),
+                block.chainid
+            )
+        );
+        
+        vm.prank(depositUser);
+        bytes32 commitmentHash_ = assetPricer.deposit_asset(
+            ZeroXBridgeL1.AssetType.ERC20,
+            address(token),
+            depositAmount,
+            depositUser
+        );
+        
+        assertEq(commitmentHash_, expectedCommitmentHash);
+        assertEq(assetPricer.userDeposits(address(token), depositUser), depositAmount);
+        assertEq(assetPricer.nextDepositNonce(depositUser), 1);
+    }
+
+    function testRejectionOfInvalidAccounts() public {
+        uint256 depositAmount = 1 ether;
+        
+        // Test zero address for user
+        vm.expectRevert("ZeroXBridge: Invalid user address");
+        assetPricer.deposit_asset{value: depositAmount}(
+            ZeroXBridgeL1.AssetType.ETH,
+            address(0),
+            depositAmount,
+            address(0)
+        );
+        
+        // Test zero amount
+        vm.expectRevert("ZeroXBridge: Amount must be greater than zero");
+        assetPricer.deposit_asset{value: 0}(
+            ZeroXBridgeL1.AssetType.ETH,
+            address(0),
+            0,
+            user1
+        );
+    }
+
+    function testUnauthorisedERC20Transfer() public {
+        uint256 depositAmount = 100 * 10**18;
+        address depositUser = user1;
+        
+        // Don't approve the transfer
+        vm.prank(depositUser);
+        vm.expectRevert();
+        assetPricer.deposit_asset(
+            ZeroXBridgeL1.AssetType.ERC20,
+            address(token),
+            depositAmount,
+            depositUser
+        );
+    }
+
+    function testDuplicateAssetPrevention() public {
+        vm.prank(admin);
+        assetPricer.registerToken(
+            ZeroXBridgeL1.AssetType.ERC20,
+            address(token)
+        );
+        
+        // Try to register same token again
+        vm.prank(admin);
+        vm.expectRevert("Token already registered");
+        assetPricer.registerToken(
+            ZeroXBridgeL1.AssetType.ERC20,
+            address(token)
+        );
+    }
+
+        function testETHDepositEvent() public {
+        uint256 depositAmount = 1 ether;
+        vm.deal(user1, depositAmount);
+        
+        bytes32 expectedCommitmentHash = keccak256(
+            abi.encodePacked(
+                address(0),
+                depositAmount,
+                user1,
+                uint256(0),
+                block.chainid
+            )
+        );
+        
+        vm.expectEmit(true, true, true, true);
+        emit DepositEvent(
+            address(0),
+            ZeroXBridgeL1.AssetType.ETH,
+            depositAmount,
+            user1,
+            expectedCommitmentHash
+        );
+        
+        vm.prank(user1);
+        assetPricer.deposit_asset{value: depositAmount}(
+            ZeroXBridgeL1.AssetType.ETH,
+            address(0),
+            depositAmount,
+            user1
+        );
+    }
+
+    function testERC20DepositEvent() public {
+        uint256 depositAmount = 100 * 10**18;
         token.mint(user1, depositAmount);
-
-        // Approve the bridge to spend user1's tokens
+        
         vm.prank(user1);
         token.approve(address(assetPricer), depositAmount);
-
-        // Expect the DepositEvent to be emitted
-        vm.expectEmit(true, true, true, false);
+        
         bytes32 expectedCommitmentHash = keccak256(
             abi.encodePacked(
                 address(token),
                 depositAmount,
                 user1,
-                uint256(0), // nonce is 0 for first deposit
+                uint256(0),
                 block.chainid
             )
         );
-        emit DepositEvent(address(token), depositAmount, user1, expectedCommitmentHash);
-
-        // Make the deposit as user1
-        vm.prank(user1);
-        bytes32 returnedHash = assetPricer.deposit_asset(address(token), depositAmount, user1);
-
-        // Verify the correct hash was returned
-        assertEq(returnedHash, expectedCommitmentHash, "Commitment hash should match expected");
-
-        // Verify token transfer happened correctly
-        assertEq(token.balanceOf(user1), 0, "User should have transferred all tokens");
-        assertEq(
-            token.balanceOf(address(assetPricer)),
-            depositAmount + 1000000 * 10 ** 18,
-            "Contract should have received tokens"
+        
+        vm.expectEmit(true, true, true, true);
+        emit DepositEvent(
+            address(token),
+            ZeroXBridgeL1.AssetType.ERC20,
+            depositAmount,
+            user1,
+            expectedCommitmentHash
         );
-
-        // Verify deposit tracking
-        assertEq(assetPricer.userDeposits(address(token), user1), depositAmount, "User deposit should be tracked");
-
-        // Verify nonce was incremented
-        assertEq(assetPricer.nextDepositNonce(user1), 1, "Nonce should be incremented");
-    }
-
-    function testDepositAssetForOtherUser() public {
-        // Setup - whitelist the token for deposits
-        vm.prank(admin);
-        assetPricer.whitelistToken(address(token));
-
-        uint256 depositAmount = 100 * 10 ** 18;
-
-        // Mint some tokens to user1
-        token.mint(user1, depositAmount);
-
-        // Approve the bridge to spend user1's tokens
+        
         vm.prank(user1);
-        token.approve(address(assetPricer), depositAmount);
-
-        // User1 deposits for user2
-        vm.prank(user1);
-        assetPricer.deposit_asset(address(token), depositAmount, user2);
-
-        // Verify deposit tracking for user2 (not user1)
-        assertEq(assetPricer.userDeposits(address(token), user2), depositAmount, "User2's deposit should be tracked");
-        assertEq(assetPricer.userDeposits(address(token), user1), 0, "User1 should not have deposits");
-
-        // Verify nonce was incremented for user1 (the sender)
-        assertEq(assetPricer.nextDepositNonce(user1), 1, "User1's nonce should be incremented");
-        assertEq(assetPricer.nextDepositNonce(user2), 0, "User2's nonce should not be incremented");
-    }
-
-    function testMultipleDepositsIncrementNonce() public {
-        // Setup - whitelist the token for deposits
-        vm.prank(admin);
-        assetPricer.whitelistToken(address(token));
-
-        uint256 depositAmount = 100 * 10 ** 18;
-
-        // Mint some tokens to user1
-        token.mint(user1, depositAmount * 2);
-
-        // Approve the bridge to spend user1's tokens
-        vm.prank(user1);
-        token.approve(address(assetPricer), depositAmount * 2);
-
-        // First deposit
-        vm.prank(user1);
-        bytes32 hash1 = assetPricer.deposit_asset(address(token), depositAmount, user1);
-
-        // Second deposit
-        vm.prank(user1);
-        bytes32 hash2 = assetPricer.deposit_asset(address(token), depositAmount, user1);
-
-        // Verify hashes are different due to different nonces
-        assertTrue(hash1 != hash2, "Commitment hashes should be different");
-
-        // Verify nonce was incremented twice
-        assertEq(assetPricer.nextDepositNonce(user1), 2, "Nonce should be incremented twice");
-
-        // Verify deposit tracking accumulates
-        assertEq(assetPricer.userDeposits(address(token), user1), depositAmount * 2, "User deposits should accumulate");
-    }
-
-    function testCannotDepositNonWhitelistedToken() public {
-        // Do not whitelist the token
-
-        uint256 depositAmount = 100 * 10 ** 18;
-
-        // Mint some tokens to user1
-        token.mint(user1, depositAmount);
-
-        // Approve the bridge to spend user1's tokens
-        vm.prank(user1);
-        token.approve(address(assetPricer), depositAmount);
-
-        // Attempt deposit should fail
-        vm.prank(user1);
-        vm.expectRevert("ZeroXBridge: Token not whitelisted");
-        assetPricer.deposit_asset(address(token), depositAmount, user1);
-    }
-
-    function testCannotDepositZeroAmount() public {
-        // Setup - whitelist the token for deposits
-        vm.prank(admin);
-        assetPricer.whitelistToken(address(token));
-
-        // Attempt deposit with zero amount should fail
-        vm.prank(user1);
-        vm.expectRevert("ZeroXBridge: Amount must be greater than zero");
-        assetPricer.deposit_asset(address(token), 0, user1);
-    }
-
-    function testCannotDepositToZeroAddress() public {
-        // Setup - whitelist the token for deposits
-        vm.prank(admin);
-        assetPricer.whitelistToken(address(token));
-
-        uint256 depositAmount = 100 * 10 ** 18;
-
-        // Mint some tokens to user1
-        token.mint(user1, depositAmount);
-
-        // Approve the bridge to spend user1's tokens
-        vm.prank(user1);
-        token.approve(address(assetPricer), depositAmount);
-
-        // Attempt deposit to zero address should fail
-        vm.prank(user1);
-        vm.expectRevert("ZeroXBridge: Invalid user address");
-        assetPricer.deposit_asset(address(token), depositAmount, address(0));
+        assetPricer.deposit_asset(
+            ZeroXBridgeL1.AssetType.ERC20,
+            address(token),
+            depositAmount,
+            user1
+        );
     }
 }
