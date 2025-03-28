@@ -254,7 +254,11 @@ contract ZeroXBridgeL1 is Ownable {
      * @param user The address that will receive the bridged tokens on L2
      * @return commitmentHash Returns the generated commitment hash for verification on L2
      */
-    function deposit_asset(address token, uint256 amount, address user) external onlyRegistered returns (bytes32 commitmentHash) {
+    function deposit_asset(address token, uint256 amount, address user)
+        external
+        onlyRegistered
+        returns (bytes32 commitmentHash)
+    {
         // Verify token is whitelisted
         require(whitelistedTokens[token], "ZeroXBridge: Token not whitelisted");
         require(amount > 0, "ZeroXBridge: Amount must be greater than zero");
@@ -368,12 +372,7 @@ contract ZeroXBridgeL1 is Ownable {
      * @return x3 Resulting X-coordinate of the point
      * @return y3 Resulting Y-coordinate of the point
      */
-    function ecAdd(
-        uint256 x1,
-        uint256 y1,
-        uint256 x2,
-        uint256 y2
-    ) internal view returns (uint256 x3, uint256 y3) {
+    function ecAdd(uint256 x1, uint256 y1, uint256 x2, uint256 y2) internal view returns (uint256 x3, uint256 y3) {
         if (x1 == 0 && y1 == 0) return (x2, y2);
         if (x2 == 0 && y2 == 0) return (x1, y1);
         if (x1 == x2) {
@@ -386,7 +385,7 @@ contract ZeroXBridgeL1 is Ownable {
         x3 = (mulmod(lambda, lambda, K_MODULUS) + K_MODULUS - x1 + K_MODULUS - x2) % K_MODULUS;
         y3 = (mulmod(lambda, (x1 + K_MODULUS - x3) % K_MODULUS, K_MODULUS) + K_MODULUS - y1) % K_MODULUS;
     }
-    
+
     /**
      * @notice Doubles a point on the Stark Curve
      * @param x X-coordinate
@@ -427,7 +426,7 @@ contract ZeroXBridgeL1 is Ownable {
             scalarBits >>= 1;
         }
     }
-    
+
     /**
      * @notice Verifies a Starknet signature
      * @param messageHash Hash of the message signed
