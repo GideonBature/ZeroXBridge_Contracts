@@ -107,7 +107,7 @@ contract ZeroXBridgeL1 is Ownable {
         _;
     }
 
-    function registerToken(AssetType assetType, address tokenAddress) external {
+    function registerToken(AssetType assetType, address tokenAddress) external onlyAdmin{
         bytes32 assetKey = keccak256(abi.encodePacked(assetType, tokenAddress));
 
         require(
