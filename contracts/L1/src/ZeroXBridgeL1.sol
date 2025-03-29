@@ -18,6 +18,8 @@ interface IGpsStatementVerifier {
 }
 
 contract ZeroXBridgeL1 is Ownable {
+    using ECDSA for bytes32;
+
     // Storage variables
     address public admin;
     uint256 public tvl; // Total Value Locked in USD, with 18 decimals
@@ -27,11 +29,34 @@ contract ZeroXBridgeL1 is Ownable {
 
     using SafeERC20 for IERC20;
 
+    // Enum to track asset type for token registry
+    enum AssetType {
+        ETH,
+        ERC20
+    }
+    // Struct to store token registry data
+
+    struct TokenAssetData {
+        AssetType assetType; // 0 for ETH, 1 for ERC-20
+        address tokenAddress; // ERC-20 contract address (0x0 for ETH)
+        bool isRegistered; // Prevent duplicate registration
+    }
+
     // Starknet GPS Statement Verifier interface
     IGpsStatementVerifier public gpsVerifier;
 
+    // Maps Ethereum address to Starknet pub key
+    mapping(address => uint256) public userRecord;
+
+    //Starknet curve constants
+    uint256 private constant K_BETA = 0x6f21413efbe40de150e596d72f7a8c5609ad26c15c915c1f4cdfcb99cee9e89;
+    uint256 private constant K_MODULUS = 0x800000000000011000000000000000000000000000000000000000000000001;
+
     // Track verified proofs to prevent replay attacks
     mapping(bytes32 => bool) public verifiedProofs;
+
+    // Track token registry data
+    mapping(bytes32 => TokenAssetData) public tokenRegistry;
 
     // Track claimable funds per user
     mapping(address => uint256) public claimableFunds;
@@ -48,9 +73,6 @@ contract ZeroXBridgeL1 is Ownable {
     // Whitelisted tokens mapping
     mapping(address => bool) public whitelistedTokens;
 
-    // Maps Ethereum address to Starknet pub key
-    mapping(address => uint256) public userRecord;
-
     //Starknet curve constants
     uint256 private constant K_BETA = 0x6f21413efbe40de150e596d72f7a8c5609ad26c15c915c1f4cdfcb99cee9e89;
     uint256 private constant K_MODULUS = 0x800000000000011000000000000000000000000000000000000000000000001;
@@ -65,8 +87,6 @@ contract ZeroXBridgeL1 is Ownable {
 
     IERC20 public claimableToken;
 
-    using ECDSA for bytes32;
-
     // Events
     event FundsUnlocked(address indexed user, uint256 amount, bytes32 commitmentHash);
     event RelayerStatusChanged(address indexed relayer, bool status);
@@ -74,7 +94,10 @@ contract ZeroXBridgeL1 is Ownable {
     event ClaimEvent(address indexed user, uint256 amount);
     event WhitelistEvent(address indexed token);
     event DewhitelistEvent(address indexed token);
-    event DepositEvent(address indexed token, uint256 amount, address indexed user, bytes32 commitmentHash);
+    event DepositEvent(
+        address indexed token, AssetType assetType, uint256 amount, address indexed user, bytes32 commitmentHash
+    );
+    event TokenRegistered(bytes32 indexed assetKey, AssetType assetType, address tokenAddress);
     event UserRegistered(address indexed user, uint256 starknetPubKey);
 
     constructor(
@@ -100,10 +123,37 @@ contract ZeroXBridgeL1 is Ownable {
         _;
     }
 
+    function registerToken(AssetType assetType, address tokenAddress) external onlyAdmin {
+        bytes32 assetKey = keccak256(abi.encodePacked(assetType, tokenAddress));
+
+        require(assetType == AssetType.ETH || assetType == AssetType.ERC20, "Invalid asset type");
+        if (assetType == AssetType.ERC20) require(tokenAddress != address(0), "Invalid token address");
+        require(!tokenRegistry[assetKey].isRegistered, "Token already registered");
+
+        tokenRegistry[assetKey] =
+            TokenAssetData({assetType: AssetType(assetType), tokenAddress: tokenAddress, isRegistered: true});
+        emit TokenRegistered(assetKey, assetType, tokenAddress);
+    }
+
     function addSupportedToken(address token, address priceFeed, uint8 decimals) external onlyAdmin {
         supportedTokens.push(token);
         priceFeeds[token] = priceFeed;
         tokenDecimals[token] = decimals;
+    }
+
+    /**
+     * @dev Using Starknet Curve constants (α and β) for y^2 = x^3 + α.x + β (mod P)
+     * @param signature The user signature
+     * @param starknetPubKey user starknet public key
+     */
+    function registerUser(bytes calldata signature, uint256 starknetPubKey) external {
+        require(isValidStarknetPublicKey(starknetPubKey), "ZeroXBridge: Invalid Starknet public key");
+
+        address recoveredSigner = recoverSigner(msg.sender, signature, starknetPubKey);
+        require(recoveredSigner == msg.sender, "ZeroXBridge: Invalid signature");
+
+        userRecord[msg.sender] = starknetPubKey;
+        emit UserRegistered(msg.sender, starknetPubKey);
     }
 
     function fetch_reserve_tvl() public view returns (uint256) {
@@ -210,7 +260,7 @@ contract ZeroXBridgeL1 is Ownable {
      * @dev Allows users to claim their full unlocked tokens
      * @notice Users can only claim the full amount, partial claims are not allowed
      */
-    function claim_tokens() external onlyRegistered {
+    function claim_tokens() external {
         uint256 amount = claimableFunds[msg.sender];
         require(amount > 0, "ZeroXBridge: No tokens to claim");
 
@@ -249,54 +299,65 @@ contract ZeroXBridgeL1 is Ownable {
 
     /**
      * @dev Deposits ERC20 tokens to be bridged to L2
-     * @param token The address of the token to deposit
+     * @param tokenAddress The address of the token to deposit
      * @param amount The amount of tokens to deposit
      * @param user The address that will receive the bridged tokens on L2
      * @return commitmentHash Returns the generated commitment hash for verification on L2
      */
-    function deposit_asset(address token, uint256 amount, address user)
+
+    function deposit_asset(AssetType assetType, address tokenAddress, uint256 amount, address user)
         external
-        onlyRegistered
-        returns (bytes32 commitmentHash)
+        payable
+        returns (bytes32)
     {
-        // Verify token is whitelisted
-        require(whitelistedTokens[token], "ZeroXBridge: Token not whitelisted");
         require(amount > 0, "ZeroXBridge: Amount must be greater than zero");
         require(user != address(0), "ZeroXBridge: Invalid user address");
 
+        TokenAssetData memory tokenData = getTokenData(assetType, tokenAddress);
+
+        // Check if token is whitelisted
+        if (tokenData.assetType == AssetType.ETH) {
+            require(msg.value == amount, "ZeroXBridge: Incorrect ETH amount");
+
+            // Directly add ETH to tracking (no transfer needed)
+            userDeposits[address(0)][user] += amount;
+        } else if (tokenData.assetType == AssetType.ERC20) {
+            require(tokenData.tokenAddress != address(0), "ZeroXBridge: Invalid token address");
+
+            // Perform ERC20 transfer
+            IERC20(tokenData.tokenAddress).safeTransferFrom(user, address(this), amount);
+
+            // Track ERC20 deposit
+            userDeposits[tokenData.tokenAddress][user] += amount;
+        } else {
+            revert("Invalid asset type");
+        }
+
         // Get the next nonce for this user
-        uint256 nonce = nextDepositNonce[msg.sender];
-        // Increment the nonce for replay protection
-        nextDepositNonce[msg.sender] = nonce + 1;
+        uint256 nonce = nextDepositNonce[user];
+        nextDepositNonce[user] = nonce + 1;
 
-        // Transfer tokens from user to this contract
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        // Generate commitment hash
+        bytes32 commitmentHash =
+            keccak256(abi.encodePacked(uint256(assetType), tokenAddress, amount, user, nonce, block.chainid));
 
-        // Update user deposits tracking
-        userDeposits[token][user] += amount;
+        // Emit deposit event
+        emit DepositEvent(tokenAddress, assetType, amount, user, commitmentHash);
 
-        // Generate commitment hash for verification on L2
-        // Hash includes token address, amount, user address, nonce, and chain ID for uniqueness
-        commitmentHash = keccak256(abi.encodePacked(token, amount, user, nonce, block.chainid));
-
-        // Emit deposit event with all relevant details
-        emit DepositEvent(token, amount, user, commitmentHash);
+        return commitmentHash;
     }
 
-    /**
-     * @dev Using Starknet Curve constants (α and β) for y^2 = x^3 + α.x + β (mod P)
-     * @param signature The user signature
-     * @param starknetPubKey user starknet public key
-     */
-    function registerUser(bytes calldata signature, uint256 starknetPubKey) external {
-        require(isValidStarknetPublicKey(starknetPubKey), "ZeroXBridge: Invalid Starknet public key");
+    function getTokenData(AssetType assetType, address tokenAddress) public view returns (TokenAssetData memory) {
+        bytes32 assetKey = keccak256(abi.encodePacked(assetType, tokenAddress));
+        require(assetType == AssetType.ETH || assetType == AssetType.ERC20, "Invalid asset type");
+        if (assetType == AssetType.ETH) {
+            require(tokenAddress == address(0), "Invalid token address for ETH");
+        } else {
+            require(tokenAddress != address(0), "Invalid token address for ERC20");
+        }
+        require(tokenRegistry[assetKey].isRegistered, "Token not registered");
 
-        address recoveredSigner = recoverSigner(msg.sender, signature, starknetPubKey);
-        require(recoveredSigner == msg.sender, "ZeroXBridge: Invalid signature");
-
-        userRecord[msg.sender] = starknetPubKey;
-
-        emit UserRegistered(msg.sender, starknetPubKey);
+        return tokenRegistry[assetKey];
     }
 
     /**
@@ -309,15 +370,15 @@ contract ZeroXBridgeL1 is Ownable {
         return isQuadraticResidue(addmod(addmod(xCubed, starknetPubKey, K_MODULUS), K_BETA, K_MODULUS));
     }
 
+    function isQuadraticResidue(uint256 fieldElement) private view returns (bool) {
+        return 1 == fieldPow(fieldElement, ((K_MODULUS - 1) / 2));
+    }
+
     function fieldPow(uint256 base, uint256 exponent) internal view returns (uint256) {
         (bool success, bytes memory returndata) =
             address(5).staticcall(abi.encode(0x20, 0x20, 0x20, base, exponent, K_MODULUS));
         require(success, string(returndata));
         return abi.decode(returndata, (uint256));
-    }
-
-    function isQuadraticResidue(uint256 fieldElement) private view returns (bool) {
-        return 1 == fieldPow(fieldElement, ((K_MODULUS - 1) / 2));
     }
 
     /**
