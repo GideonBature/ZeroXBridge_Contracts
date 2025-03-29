@@ -75,7 +75,6 @@ contract ZeroXBridgeL1 is Ownable {
     event ClaimEvent(address indexed user, uint256 amount);
     event WhitelistEvent(address indexed token);
     event DewhitelistEvent(address indexed token);
-    event DepositEvent(address indexed token, uint256 amount, address indexed user, bytes32 commitmentHash);
         event DepositEvent(
         address indexed token,
         AssetType assetType,
@@ -316,7 +315,7 @@ contract ZeroXBridgeL1 is Ownable {
 
     // Generate commitment hash
     bytes32 commitmentHash = keccak256(
-        abi.encodePacked(tokenAddress, amount, user, nonce, block.chainid)
+    abi.encodePacked(uint(assetType), tokenAddress, amount, user, nonce, block.chainid)
     );
 
     // Emit deposit event
