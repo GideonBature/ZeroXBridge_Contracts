@@ -2,14 +2,15 @@
 mod tests {
     use core::traits::Into;
     use starknet::{ContractAddress, contract_address_const};
-    use snforge_std::{declare, ContractClassTrait, start_prank, stop_prank, CheatTarget};
-    use l2::{L2Oracle, IL2Oracle, IL2OracleDispatcher, IL2OracleDispatcherTrait};
+    use snforge_std::{declare, ContractClassTrait, DeclareResultTrait, CheatSpan, start_cheat_caller_address,
+        stop_cheat_caller_address, EventSpyAssertionsTrait, spy_events};
+    use l2::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 
     // Helper function to deploy the contract
     fn deploy_contract() -> (ContractAddress, ContractAddress) {
         let owner = contract_address_const::<'OWNER'>();
-        let contract = declare('L2Oracle');
-        let contract_address = contract.deploy(@array![owner.into()]).unwrap();
+        let contract = declare("L2Oracle").unwrap().contract_class();
+        let (contract_address, _) = contract.deploy(@array![owner.into()]).unwrap();
         (contract_address, owner)
     }
 
@@ -31,12 +32,12 @@ mod tests {
         let relayer = contract_address_const::<'RELAYER'>();
         
         // Start impersonating owner
-        start_prank(CheatTarget::One(contract_address), owner);
+        start_cheat_caller_address(contract_address, owner);
         
         // Set relayer status to true
         dispatcher.set_relayer(relayer, true);
         
-        stop_prank(CheatTarget::One(contract_address));
+        stop_cheat_caller_address(contract_address);
     }
 
     #[test]
@@ -50,21 +51,24 @@ mod tests {
         let relayer = contract_address_const::<'RELAYER'>();
         
         // Start impersonating non-owner
-        start_prank(CheatTarget::One(contract_address), non_owner);
+        start_cheat_caller_address(contract_address, non_owner);
         
         // Try to set relayer (should fail)
         dispatcher.set_relayer(relayer, true);
         
-        stop_prank(CheatTarget::One(contract_address));
+        stop_cheat_caller_address(contract_address);
     }
 
     #[test]
     fn test_owner_can_set_tvl() {
         let (contract_address, owner) = deploy_contract();
         let dispatcher = IL2OracleDispatcher { contract_address };
+
+        // Confirm initial TVL is zero
+        assert(dispatcher.get_total_tvl() == 0, 'Initial TVL should be 0');
         
         // Start impersonating owner
-        start_prank(CheatTarget::One(contract_address), owner);
+        start_cheat_caller_address(contract_address, owner);
         
         // Set TVL
         let new_tvl: u256 = 1000000;
@@ -73,7 +77,7 @@ mod tests {
         // Verify TVL was set
         assert(dispatcher.get_total_tvl() == new_tvl, 'TVL not set correctly');
         
-        stop_prank(CheatTarget::One(contract_address));
+        stop_cheat_caller_address(contract_address);
     }
 
     #[test]
@@ -85,12 +89,12 @@ mod tests {
         let relayer = contract_address_const::<'RELAYER'>();
         
         // Set up relayer
-        start_prank(CheatTarget::One(contract_address), owner);
+        start_cheat_caller_address(contract_address, owner);
         dispatcher.set_relayer(relayer, true);
-        stop_prank(CheatTarget::One(contract_address));
+        stop_cheat_caller_address(contract_address);
         
         // Start impersonating relayer
-        start_prank(CheatTarget::One(contract_address), relayer);
+        start_cheat_caller_address(contract_address, relayer);
         
         // Set TVL as relayer
         let new_tvl: u256 = 2000000;
@@ -98,8 +102,6 @@ mod tests {
         
         // Verify TVL was set
         assert(dispatcher.get_total_tvl() == new_tvl, 'TVL not set correctly');
-        
-        stop_prank(CheatTarget::One(contract_address));
     }
 
     #[test]
@@ -112,26 +114,23 @@ mod tests {
         let unauthorized = contract_address_const::<'UNAUTHORIZED'>();
         
         // Start impersonating unauthorized user
-        start_prank(CheatTarget::One(contract_address), unauthorized);
+        start_cheat_caller_address(contract_address, unauthorized);
         
         // Try to set TVL (should fail)
         dispatcher.set_total_tvl(1000000);
-        
-        stop_prank(CheatTarget::One(contract_address));
     }
 
     #[test]
+    #[should_panic(expected: ('Caller not authorized',))]
     fn test_zero_address_cannot_be_relayer() {
         let (contract_address, owner) = deploy_contract();
         let dispatcher = IL2OracleDispatcher { contract_address };
         
         // Start impersonating owner
-        start_prank(CheatTarget::One(contract_address), owner);
+        start_cheat_caller_address(contract_address, owner);
         
         // Try to set zero address as relayer (should fail)
         let zero_address = contract_address_const::<0>();
         dispatcher.set_relayer(zero_address, true);
-        
-        stop_prank(CheatTarget::One(contract_address));
     }
 } 
