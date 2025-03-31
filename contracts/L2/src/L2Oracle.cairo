@@ -12,7 +12,9 @@ pub mod L2Oracle {
     use starknet::{ContractAddress, get_caller_address};
     use core::num::traits::Zero;
     use openzeppelin_access::ownable::OwnableComponent;
-    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map,};
+    use starknet::storage::{
+        StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map,
+    };
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
 
@@ -27,7 +29,7 @@ pub mod L2Oracle {
         #[substorage(v0)]
         ownable: OwnableComponent::Storage,
         total_tvl: u256,
-        relayers: Map<ContractAddress, bool>
+        relayers: Map<ContractAddress, bool>,
     }
 
     #[event]
@@ -36,18 +38,18 @@ pub mod L2Oracle {
         TotalTVLUpdated: TotalTVLUpdated,
         RelayerStatusUpdated: RelayerStatusUpdated,
         #[flat]
-        OwnableEvent: OwnableComponent::Event
+        OwnableEvent: OwnableComponent::Event,
     }
 
     #[derive(Drop, starknet::Event)]
     pub struct TotalTVLUpdated {
-        pub new_tvl: u256
+        pub new_tvl: u256,
     }
 
     #[derive(Drop, starknet::Event)]
     pub struct RelayerStatusUpdated {
         pub relayer: ContractAddress,
-        pub status: bool
+        pub status: bool,
     }
 
     #[constructor]
@@ -66,8 +68,8 @@ pub mod L2Oracle {
             // Check if caller is owner or authorized relayer
             let caller = get_caller_address();
             assert(
-                self.ownable.owner() == caller ||  self.relayers.entry(caller).read(),
-                'Caller not authorized'
+                self.ownable.owner() == caller || self.relayers.entry(caller).read(),
+                'Caller not authorized',
             );
 
             self.total_tvl.write(tvl);
@@ -78,7 +80,7 @@ pub mod L2Oracle {
             // Only owner can set relayer status
             self.ownable.assert_only_owner();
             assert(!relayer.is_zero(), 'Invalid relayer address');
-            
+
             self.relayers.entry(relayer).write(status);
             self.emit(RelayerStatusUpdated { relayer, status });
         }
