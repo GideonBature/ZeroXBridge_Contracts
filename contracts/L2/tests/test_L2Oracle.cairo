@@ -2,9 +2,9 @@
 mod tests {
     use core::traits::Into;
     use starknet::{ContractAddress, contract_address_const};
-    use snforge_std::{declare, ContractClassTrait, DeclareResultTrait, CheatSpan, start_cheat_caller_address,
+    use snforge_std::{declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
         stop_cheat_caller_address, EventSpyAssertionsTrait, spy_events};
-    use l2::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+    use l2::L2Oracle::{L2Oracle, IL2OracleDispatcher, IL2OracleDispatcherTrait};
 
     // Helper function to deploy the contract
     fn deploy_contract() -> (ContractAddress, ContractAddress) {
@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_initial_state() {
-        let (contract_address, owner) = deploy_contract();
+        let (contract_address, _) = deploy_contract();
         let dispatcher = IL2OracleDispatcher { contract_address };
         
         // Test initial TVL is zero
@@ -41,7 +41,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected: ('Caller not authorized',))]
+    #[should_panic(expected: ('Caller is not the owner', ))]
     fn test_non_owner_cannot_set_relayer() {
         let (contract_address, _) = deploy_contract();
         let dispatcher = IL2OracleDispatcher { contract_address };
@@ -121,7 +121,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected: ('Caller not authorized',))]
+    #[should_panic(expected: ('Invalid relayer address',))]
     fn test_zero_address_cannot_be_relayer() {
         let (contract_address, owner) = deploy_contract();
         let dispatcher = IL2OracleDispatcher { contract_address };
@@ -133,4 +133,55 @@ mod tests {
         let zero_address = contract_address_const::<0>();
         dispatcher.set_relayer(zero_address, true);
     }
-} 
+
+
+    #[test]
+    fn test_set_total_tvl_emits_event() {
+        let (contract_address, owner) = deploy_contract();
+        let dispatcher = IL2OracleDispatcher { contract_address };
+        let mut spy = spy_events();
+
+        // Start impersonating owner
+        start_cheat_caller_address(contract_address, owner);
+
+        // Set TVL
+        let new_tvl: u256 = 1000000;
+        dispatcher.set_total_tvl(new_tvl);
+
+        // Create the expected event
+        let expected_event = L2Oracle::Event::TotalTVLUpdated(
+            L2Oracle::TotalTVLUpdated { new_tvl }
+        );
+
+        // Assert that the event was emitted
+        spy.assert_emitted(@array![(contract_address, expected_event)]);
+
+        stop_cheat_caller_address(contract_address);
+    }
+
+    #[test]
+    fn test_set_relayer_emits_event() {
+        let (contract_address, owner) = deploy_contract();
+        let dispatcher = IL2OracleDispatcher { contract_address };
+        let mut spy = spy_events();
+
+        // Create a relayer address
+        let relayer = contract_address_const::<'RELAYER'>();
+
+        // Start impersonating owner
+        start_cheat_caller_address(contract_address, owner);
+
+        // Set relayer status to true
+        dispatcher.set_relayer(relayer, true);
+
+        // Create the expected event
+        let expected_event = L2Oracle::Event::RelayerStatusUpdated(
+            L2Oracle::RelayerStatusUpdated { relayer, status: true }
+        );
+
+        // Assert that the event was emitted
+        spy.assert_emitted(@array![(contract_address, expected_event)]);
+
+        stop_cheat_caller_address(contract_address);
+    }
+}

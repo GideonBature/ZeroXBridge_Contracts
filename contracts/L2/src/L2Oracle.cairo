@@ -32,7 +32,7 @@ pub mod L2Oracle {
 
     #[event]
     #[derive(Drop, starknet::Event)]
-    enum Event {
+    pub enum Event {
         TotalTVLUpdated: TotalTVLUpdated,
         RelayerStatusUpdated: RelayerStatusUpdated,
         #[flat]
@@ -40,14 +40,14 @@ pub mod L2Oracle {
     }
 
     #[derive(Drop, starknet::Event)]
-    struct TotalTVLUpdated {
-        new_tvl: u256
+    pub struct TotalTVLUpdated {
+        pub new_tvl: u256
     }
 
     #[derive(Drop, starknet::Event)]
-    struct RelayerStatusUpdated {
-        relayer: ContractAddress,
-        status: bool
+    pub struct RelayerStatusUpdated {
+        pub relayer: ContractAddress,
+        pub status: bool
     }
 
     #[constructor]
