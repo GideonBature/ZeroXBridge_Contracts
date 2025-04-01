@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "forge-std/console.sol";
+import "../utils/ElipticCurve.sol";
 
 interface IGpsStatementVerifier {
     function verifyProofAndRegister(
@@ -48,10 +50,6 @@ contract ZeroXBridgeL1 is Ownable {
     // Maps Ethereum address to Starknet pub key
     mapping(address => uint256) public userRecord;
 
-    //Starknet curve constants
-    uint256 private constant K_BETA = 0x6f21413efbe40de150e596d72f7a8c5609ad26c15c915c1f4cdfcb99cee9e89;
-    uint256 private constant K_MODULUS = 0x800000000000011000000000000000000000000000000000000000000000001;
-
     // Track verified proofs to prevent replay attacks
     mapping(bytes32 => bool) public verifiedProofs;
 
@@ -74,13 +72,15 @@ contract ZeroXBridgeL1 is Ownable {
     mapping(address => bool) public whitelistedTokens;
 
     //Starknet curve constants
-    uint256 private constant K_BETA = 0x6f21413efbe40de150e596d72f7a8c5609ad26c15c915c1f4cdfcb99cee9e89;
+    uint256 private constant K_BETA = 3141592653589793238462643383279502884197169399375105820974944592307816406665;
     uint256 private constant K_MODULUS = 0x800000000000011000000000000000000000000000000000000000000000001;
     // Full Stark Curve parameters
     uint256 private constant STARK_ALPHA = 1;
     uint256 private constant STARK_N = 0x800000000000010fffffffffffffffffffffffffffffffffffffffffffffffb;
     uint256 private constant STARK_GX = 0x1ef15c18599971b7beced415a40f0c7deacfd9b0d1819e03d723d8bc943cfca;
-    uint256 private constant STARK_GY = 0x2fc95a6e5b3cfbfdb75f3e0f6c5e5f67e8e4f5e5a8d7e5e5f5e5f5e5f5e5f5e;
+    uint256 private constant STARK_GY = 0x5668060aa49730b7be4801df46ec62de53ecd11abe43a32873000c36e8dc1f;
+    uint256 constant EC_ORDER = 3618502788666131213697322783095070105526743751716087489154079457884512865583;
+    uint256 constant N_ELEMENT_BITS_ECDSA = 251;
 
     // Cairo program hash that corresponds to the burn verification program
     uint256 public cairoVerifierId;
@@ -425,121 +425,149 @@ contract ZeroXBridgeL1 is Ownable {
     }
 
     /**
-     * @notice Adds two points on the Stark Curve
-     * @param x1 X-coordinate of first point
-     * @param y1 Y-coordinate of first point
-     * @param x2 X-coordinate of second point
-     * @param y2 Y-coordinate of second point
-     * @return x3 Resulting X-coordinate of the point
-     * @return y3 Resulting Y-coordinate of the point
+     * @notice Computes the modular inverse of a modulo m using exponentiation
+     * @param a Number to invert
+     * @param m Modulus (must be prime)
+     * @return Inverse of a modulo m
      */
-    function ecAdd(uint256 x1, uint256 y1, uint256 x2, uint256 y2) internal view returns (uint256 x3, uint256 y3) {
-        if (x1 == 0 && y1 == 0) return (x2, y2);
-        if (x2 == 0 && y2 == 0) return (x1, y1);
-        if (x1 == x2) {
-            if ((y1 + y2) % K_MODULUS == 0) return (0, 0); // Point at infinity
-            return ecDouble(x1, y1);
-        }
-        uint256 dx = (x2 + K_MODULUS - x1) % K_MODULUS;
-        uint256 dy = (y2 + K_MODULUS - y1) % K_MODULUS;
-        uint256 lambda = mulmod(dy, fieldPow(dx, K_MODULUS - 2), K_MODULUS);
-        x3 = (mulmod(lambda, lambda, K_MODULUS) + K_MODULUS - x1 + K_MODULUS - x2) % K_MODULUS;
-        y3 = (mulmod(lambda, (x1 + K_MODULUS - x3) % K_MODULUS, K_MODULUS) + K_MODULUS - y1) % K_MODULUS;
+    function modInverse(uint256 a, uint256 m) internal pure returns (uint256) {
+        require(a != 0, "Inverse does not exist");
+        return powMod(a, m - 2, m);
     }
 
     /**
-     * @notice Doubles a point on the Stark Curve
-     * @param x X-coordinate
-     * @param y Y-coordinate
-     * @return x2 Resulting X-coordinate of the point
-     * @return y2 Resulting Y-coordinate of the point
+     * @notice Computes base^exponent mod modulus
+     * @param base Base number
+     * @param exponent Exponent
+     * @param modulus Modulus
+     * @return Result of base^exponent mod modulus
      */
-    function ecDouble(uint256 x, uint256 y) internal view returns (uint256 x2, uint256 y2) {
-        if (y == 0) return (0, 0); // Point at infinity
-        uint256 lambda = mulmod(
-            addmod(mulmod(3, mulmod(x, x, K_MODULUS), K_MODULUS), STARK_ALPHA, K_MODULUS),
-            fieldPow(mulmod(2, y, K_MODULUS), K_MODULUS - 2),
-            K_MODULUS
-        );
-        x2 = (mulmod(lambda, lambda, K_MODULUS) + K_MODULUS - x - x) % K_MODULUS;
-        y2 = (mulmod(lambda, (x + K_MODULUS - x2) % K_MODULUS, K_MODULUS) + K_MODULUS - y) % K_MODULUS;
-    }
-
-    /**
-     * @notice Multiplies a point on the Stark Curve by a scalar
-     * @param scalar Scalar value
-     * @param x X-coordinate
-     * @param y Y-coordinate
-     * @return xR Resulting X-coordinate of the point
-     * @return yR Resulting Y-coordinate of the point
-     */
-    function ecMul(uint256 scalar, uint256 x, uint256 y) internal view returns (uint256 xR, uint256 yR) {
-        xR = 0;
-        yR = 0;
-        uint256 scalarBits = scalar;
-        uint256 px = x;
-        uint256 py = y;
-        while (scalarBits > 0) {
-            if (scalarBits & 1 == 1) {
-                (xR, yR) = ecAdd(xR, yR, px, py);
+    function powMod(uint256 base, uint256 exponent, uint256 modulus) internal pure returns (uint256) {
+        uint256 result = 1;
+        base = base % modulus;
+        while (exponent > 0) {
+            if (exponent & 1 == 1) {
+                result = mulmod(result, base, modulus);
             }
-            (px, py) = ecDouble(px, py);
-            scalarBits >>= 1;
+            base = mulmod(base, base, modulus);
+            exponent >>= 1;
         }
+        return result;
     }
 
-    /**
-     * @notice Verifies a Starknet signature
-     * @param messageHash Hash of the message signed
-     * @param starknetSig Signature as bytes (r, s concatenated)
-     * @param starkPubKeyX X-coordinate of the Starknet public key
-     * @param starkPubKeyY Y-coordinate of the Starknet public key
-     * @return isValid True if the signature is valid, false otherwise
-     */
+   /**
+ * @notice Adds two points on the Stark Curve
+ * @param x1 X-coordinate of first point
+ * @param y1 Y-coordinate of first point
+ * @param x2 X-coordinate of second point
+ * @param y2 Y-coordinate of second point
+ * @return x3 Resulting X-coordinate
+ * @return y3 Resulting Y-coordinate
+ */
+function ecAdd(
+    uint256 x1,
+    uint256 y1,
+    uint256 x2,
+    uint256 y2
+) internal view returns (uint256 x3, uint256 y3) {
+    if (x1 == 0 && y1 == 0) return (x2, y2);
+    if (x2 == 0 && y2 == 0) return (x1, y1);
+    if (x1 == x2 && addmod(y1, y2, K_MODULUS) == 0) return (0, 0);
+
+    uint256 x1Mod = x1 % K_MODULUS;
+    uint256 x2Mod = x2 % K_MODULUS;
+    uint256 y1Mod = y1 % K_MODULUS;
+    uint256 y2Mod = y2 % K_MODULUS;
+
+    uint256 dx = addmod(x2Mod, K_MODULUS - x1Mod, K_MODULUS);
+    uint256 dy = addmod(y2Mod, K_MODULUS - y1Mod, K_MODULUS);
+    uint256 lambda = mulmod(dy, modInverse(dx, K_MODULUS), K_MODULUS);
+    x3 = addmod(mulmod(lambda, lambda, K_MODULUS), addmod(K_MODULUS - x1Mod, K_MODULUS - x2Mod, K_MODULUS), K_MODULUS);
+    y3 = addmod(mulmod(lambda, addmod(x1Mod, K_MODULUS - x3, K_MODULUS), K_MODULUS), K_MODULUS - y1Mod, K_MODULUS);
+}
+
+/**
+ * @notice Doubles a point on the Stark Curve
+ * @param x X-coordinate
+ * @param y Y-coordinate
+ * @return x2 Resulting X-coordinate
+ * @return y2 Resulting Y-coordinate
+ */
+function ecDouble(uint256 x, uint256 y) internal view returns (uint256 x2, uint256 y2) {
+    if (y == 0) return (0, 0);
+    uint256 xMod = x % K_MODULUS;
+    uint256 yMod = y % K_MODULUS;
+    uint256 lambda = mulmod(
+        addmod(mulmod(3, mulmod(xMod, xMod, K_MODULUS), K_MODULUS), STARK_ALPHA, K_MODULUS),
+        modInverse(mulmod(2, yMod, K_MODULUS), K_MODULUS),
+        K_MODULUS
+    );
+    x2 = addmod(mulmod(lambda, lambda, K_MODULUS), K_MODULUS - addmod(xMod, xMod, K_MODULUS), K_MODULUS);
+    y2 = addmod(mulmod(lambda, addmod(xMod, K_MODULUS - x2, K_MODULUS), K_MODULUS), K_MODULUS - yMod, K_MODULUS);
+}
+
+/**
+ * @notice Multiplies a point on the Stark Curve by a scalar
+ * @param scalar Scalar value
+ * @param x X-coordinate
+ * @param y Y-coordinate
+ * @return xR Resulting X-coordinate
+ * @return yR Resulting Y-coordinate
+ */
+function ecMul(uint256 scalar, uint256 x, uint256 y) internal view returns (uint256 xR, uint256 yR) {
+    xR = 0;
+    yR = 0;
+    uint256 scalarMod = scalar % STARK_N;
+    uint256 px = x % K_MODULUS;
+    uint256 py = y % K_MODULUS;
+    while (scalarMod > 0) {
+        if (scalarMod & 1 == 1) {
+            (xR, yR) = ecAdd(xR, yR, px, py);
+        }
+        (px, py) = ecDouble(px, py);
+        scalarMod >>= 1;
+    }
+}
+
+/**
+ * @notice Verifies a Starknet signature
+ * @param messageHash Hash of the message signed
+ * @param starknetSig Signature as bytes (r, s concatenated)
+ * @param starkPubKeyX X-coordinate of the Starknet public key
+ * @param starkPubKeyY Y-coordinate of the Starknet public key
+ * @return isValid True if the signature is valid
+ */
+
     function verifyStarknetSignature(
         uint256 messageHash,
         bytes calldata starknetSig,
         uint256 starkPubKeyX,
         uint256 starkPubKeyY
     ) public view returns (bool isValid) {
-        // Extract r and s from starknetSig (assuming 64 bytes: 32 for r, 32 for s)
         require(starknetSig.length == 64, "Invalid signature length");
         uint256 r = uint256(bytes32(starknetSig[0:32]));
         uint256 s = uint256(bytes32(starknetSig[32:64]));
 
-        // Validate public key is on the curve
-        require(isOnStarkCurve(starkPubKeyX, starkPubKeyY), "Public key not on Stark Curve");
+        require(messageHash % EC_ORDER == messageHash, "msgHash out of range");
+        require(s >= 1 && s < EC_ORDER, "s out of range");
+        uint256 w = EllipticCurve.invMod(s, EC_ORDER);
+        require(r >= 1 && r < (1 << N_ELEMENT_BITS_ECDSA), "r out of range");
+        require(w >= 1 && w < (1 << N_ELEMENT_BITS_ECDSA), "w out of range");
 
-        // Validate sig. components
-        require(r >= 1 && r < STARK_N, "r out of range");
-        require(s >= 1 && s < STARK_N, "s out of range");
+        // Verify public key is on curve
+        uint256 x3 = mulmod(mulmod(starkPubKeyX, starkPubKeyX, K_MODULUS), starkPubKeyX, K_MODULUS);
+        uint256 y2 = mulmod(starkPubKeyY, starkPubKeyY, K_MODULUS);
+        require(
+            y2 == addmod(addmod(x3, starkPubKeyX, K_MODULUS), K_BETA, K_MODULUS),
+            "Public key not on Stark Curve"
+        );
 
-        // Reduc message hash modulo N
-        uint256 z = messageHash % STARK_N;
+        // Compute signature verification
+        (uint256 zG_x, uint256 zG_y) = EllipticCurve.ecMul(messageHash, STARK_GX, STARK_GY, STARK_ALPHA, K_MODULUS);
+        (uint256 rQ_x, uint256 rQ_y) = EllipticCurve.ecMul(r, starkPubKeyX, starkPubKeyY, STARK_ALPHA, K_MODULUS);
+        (uint256 b_x, uint256 b_y) = EllipticCurve.ecAdd(zG_x, zG_y, rQ_x, rQ_y, STARK_ALPHA, K_MODULUS);
+        (uint256 res_x, ) = EllipticCurve.ecMul(w, b_x, b_y, STARK_ALPHA, K_MODULUS);
 
-        // calc ECDSA components
-        uint256 w = fieldPow(s, STARK_N - 2); // s^(-1) mod N
-        uint256 u1 = mulmod(z, w, STARK_N);
-        uint256 u2 = mulmod(r, w, STARK_N);
-
-        // // calc P = u1 * G + u2 * Q
-        // (uint256 px, uint256 py) = ecAdd(
-        //     ecMul(u1, STARK_GX, STARK_GY),
-        //     ecMul(u2, starkPubKeyX, starkPubKeyY)
-        // );
-        // Calculate u1 * G
-        (uint256 x1, uint256 y1) = ecMul(u1, STARK_GX, STARK_GY);
-        // Calculate u2 * Q
-        (uint256 x2, uint256 y2) = ecMul(u2, starkPubKeyX, starkPubKeyY);
-        // Add the two points: P = u1 * G + u2 * Q
-        (uint256 px, uint256 py) = ecAdd(x1, y1, x2, y2);
-
-        // Check if point is at infinity
-        if (px == 0 && py == 0) {
-            return false;
-        }
-
-        // Verify signature
-        isValid = (px % STARK_N) == r;
+        isValid = res_x == r;
     }
 }
