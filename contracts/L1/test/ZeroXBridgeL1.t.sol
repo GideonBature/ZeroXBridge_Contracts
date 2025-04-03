@@ -61,7 +61,7 @@ contract ZeroXBridgeL1Test is Test {
     address public usdcPriceFeed;
 
     MockGpsStatementVerifier public mockVerifier;
-//     MockERC20 public token;
+    //     MockERC20 public token;
 
     address public owner = address(0x1);
     address public user1 = address(0x2);

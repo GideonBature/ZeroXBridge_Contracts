@@ -304,7 +304,6 @@ contract ZeroXBridgeL1 is Ownable {
      * @param user The address that will receive the bridged tokens on L2
      * @return commitmentHash Returns the generated commitment hash for verification on L2
      */
-
     function deposit_asset(AssetType assetType, address tokenAddress, uint256 amount, address user)
         external
         payable
@@ -455,89 +454,85 @@ contract ZeroXBridgeL1 is Ownable {
         return result;
     }
 
-   /**
- * @notice Adds two points on the Stark Curve
- * @param x1 X-coordinate of first point
- * @param y1 Y-coordinate of first point
- * @param x2 X-coordinate of second point
- * @param y2 Y-coordinate of second point
- * @return x3 Resulting X-coordinate
- * @return y3 Resulting Y-coordinate
- */
-function ecAdd(
-    uint256 x1,
-    uint256 y1,
-    uint256 x2,
-    uint256 y2
-) internal view returns (uint256 x3, uint256 y3) {
-    if (x1 == 0 && y1 == 0) return (x2, y2);
-    if (x2 == 0 && y2 == 0) return (x1, y1);
-    if (x1 == x2 && addmod(y1, y2, K_MODULUS) == 0) return (0, 0);
+    /**
+     * @notice Adds two points on the Stark Curve
+     * @param x1 X-coordinate of first point
+     * @param y1 Y-coordinate of first point
+     * @param x2 X-coordinate of second point
+     * @param y2 Y-coordinate of second point
+     * @return x3 Resulting X-coordinate
+     * @return y3 Resulting Y-coordinate
+     */
+    function ecAdd(uint256 x1, uint256 y1, uint256 x2, uint256 y2) internal view returns (uint256 x3, uint256 y3) {
+        if (x1 == 0 && y1 == 0) return (x2, y2);
+        if (x2 == 0 && y2 == 0) return (x1, y1);
+        if (x1 == x2 && addmod(y1, y2, K_MODULUS) == 0) return (0, 0);
 
-    uint256 x1Mod = x1 % K_MODULUS;
-    uint256 x2Mod = x2 % K_MODULUS;
-    uint256 y1Mod = y1 % K_MODULUS;
-    uint256 y2Mod = y2 % K_MODULUS;
+        uint256 x1Mod = x1 % K_MODULUS;
+        uint256 x2Mod = x2 % K_MODULUS;
+        uint256 y1Mod = y1 % K_MODULUS;
+        uint256 y2Mod = y2 % K_MODULUS;
 
-    uint256 dx = addmod(x2Mod, K_MODULUS - x1Mod, K_MODULUS);
-    uint256 dy = addmod(y2Mod, K_MODULUS - y1Mod, K_MODULUS);
-    uint256 lambda = mulmod(dy, modInverse(dx, K_MODULUS), K_MODULUS);
-    x3 = addmod(mulmod(lambda, lambda, K_MODULUS), addmod(K_MODULUS - x1Mod, K_MODULUS - x2Mod, K_MODULUS), K_MODULUS);
-    y3 = addmod(mulmod(lambda, addmod(x1Mod, K_MODULUS - x3, K_MODULUS), K_MODULUS), K_MODULUS - y1Mod, K_MODULUS);
-}
-
-/**
- * @notice Doubles a point on the Stark Curve
- * @param x X-coordinate
- * @param y Y-coordinate
- * @return x2 Resulting X-coordinate
- * @return y2 Resulting Y-coordinate
- */
-function ecDouble(uint256 x, uint256 y) internal view returns (uint256 x2, uint256 y2) {
-    if (y == 0) return (0, 0);
-    uint256 xMod = x % K_MODULUS;
-    uint256 yMod = y % K_MODULUS;
-    uint256 lambda = mulmod(
-        addmod(mulmod(3, mulmod(xMod, xMod, K_MODULUS), K_MODULUS), STARK_ALPHA, K_MODULUS),
-        modInverse(mulmod(2, yMod, K_MODULUS), K_MODULUS),
-        K_MODULUS
-    );
-    x2 = addmod(mulmod(lambda, lambda, K_MODULUS), K_MODULUS - addmod(xMod, xMod, K_MODULUS), K_MODULUS);
-    y2 = addmod(mulmod(lambda, addmod(xMod, K_MODULUS - x2, K_MODULUS), K_MODULUS), K_MODULUS - yMod, K_MODULUS);
-}
-
-/**
- * @notice Multiplies a point on the Stark Curve by a scalar
- * @param scalar Scalar value
- * @param x X-coordinate
- * @param y Y-coordinate
- * @return xR Resulting X-coordinate
- * @return yR Resulting Y-coordinate
- */
-function ecMul(uint256 scalar, uint256 x, uint256 y) internal view returns (uint256 xR, uint256 yR) {
-    xR = 0;
-    yR = 0;
-    uint256 scalarMod = scalar % STARK_N;
-    uint256 px = x % K_MODULUS;
-    uint256 py = y % K_MODULUS;
-    while (scalarMod > 0) {
-        if (scalarMod & 1 == 1) {
-            (xR, yR) = ecAdd(xR, yR, px, py);
-        }
-        (px, py) = ecDouble(px, py);
-        scalarMod >>= 1;
+        uint256 dx = addmod(x2Mod, K_MODULUS - x1Mod, K_MODULUS);
+        uint256 dy = addmod(y2Mod, K_MODULUS - y1Mod, K_MODULUS);
+        uint256 lambda = mulmod(dy, modInverse(dx, K_MODULUS), K_MODULUS);
+        x3 = addmod(
+            mulmod(lambda, lambda, K_MODULUS), addmod(K_MODULUS - x1Mod, K_MODULUS - x2Mod, K_MODULUS), K_MODULUS
+        );
+        y3 = addmod(mulmod(lambda, addmod(x1Mod, K_MODULUS - x3, K_MODULUS), K_MODULUS), K_MODULUS - y1Mod, K_MODULUS);
     }
-}
 
-/**
- * @notice Verifies a Starknet signature
- * @param messageHash Hash of the message signed
- * @param starknetSig Signature as bytes (r, s concatenated)
- * @param starkPubKeyX X-coordinate of the Starknet public key
- * @param starkPubKeyY Y-coordinate of the Starknet public key
- * @return isValid True if the signature is valid
- */
+    /**
+     * @notice Doubles a point on the Stark Curve
+     * @param x X-coordinate
+     * @param y Y-coordinate
+     * @return x2 Resulting X-coordinate
+     * @return y2 Resulting Y-coordinate
+     */
+    function ecDouble(uint256 x, uint256 y) internal view returns (uint256 x2, uint256 y2) {
+        if (y == 0) return (0, 0);
+        uint256 xMod = x % K_MODULUS;
+        uint256 yMod = y % K_MODULUS;
+        uint256 lambda = mulmod(
+            addmod(mulmod(3, mulmod(xMod, xMod, K_MODULUS), K_MODULUS), STARK_ALPHA, K_MODULUS),
+            modInverse(mulmod(2, yMod, K_MODULUS), K_MODULUS),
+            K_MODULUS
+        );
+        x2 = addmod(mulmod(lambda, lambda, K_MODULUS), K_MODULUS - addmod(xMod, xMod, K_MODULUS), K_MODULUS);
+        y2 = addmod(mulmod(lambda, addmod(xMod, K_MODULUS - x2, K_MODULUS), K_MODULUS), K_MODULUS - yMod, K_MODULUS);
+    }
 
+    /**
+     * @notice Multiplies a point on the Stark Curve by a scalar
+     * @param scalar Scalar value
+     * @param x X-coordinate
+     * @param y Y-coordinate
+     * @return xR Resulting X-coordinate
+     * @return yR Resulting Y-coordinate
+     */
+    function ecMul(uint256 scalar, uint256 x, uint256 y) internal view returns (uint256 xR, uint256 yR) {
+        xR = 0;
+        yR = 0;
+        uint256 scalarMod = scalar % STARK_N;
+        uint256 px = x % K_MODULUS;
+        uint256 py = y % K_MODULUS;
+        while (scalarMod > 0) {
+            if (scalarMod & 1 == 1) {
+                (xR, yR) = ecAdd(xR, yR, px, py);
+            }
+            (px, py) = ecDouble(px, py);
+            scalarMod >>= 1;
+        }
+    }
+
+    /**
+     * @notice Verifies a Starknet signature
+     * @param messageHash Hash of the message signed
+     * @param starknetSig Signature as bytes (r, s concatenated)
+     * @param starkPubKeyX X-coordinate of the Starknet public key
+     * @param starkPubKeyY Y-coordinate of the Starknet public key
+     * @return isValid True if the signature is valid
+     */
     function verifyStarknetSignature(
         uint256 messageHash,
         bytes calldata starknetSig,
@@ -557,16 +552,13 @@ function ecMul(uint256 scalar, uint256 x, uint256 y) internal view returns (uint
         // Verify public key is on curve
         uint256 x3 = mulmod(mulmod(starkPubKeyX, starkPubKeyX, K_MODULUS), starkPubKeyX, K_MODULUS);
         uint256 y2 = mulmod(starkPubKeyY, starkPubKeyY, K_MODULUS);
-        require(
-            y2 == addmod(addmod(x3, starkPubKeyX, K_MODULUS), K_BETA, K_MODULUS),
-            "Public key not on Stark Curve"
-        );
+        require(y2 == addmod(addmod(x3, starkPubKeyX, K_MODULUS), K_BETA, K_MODULUS), "Public key not on Stark Curve");
 
         // Compute signature verification
         (uint256 zG_x, uint256 zG_y) = EllipticCurve.ecMul(messageHash, STARK_GX, STARK_GY, STARK_ALPHA, K_MODULUS);
         (uint256 rQ_x, uint256 rQ_y) = EllipticCurve.ecMul(r, starkPubKeyX, starkPubKeyY, STARK_ALPHA, K_MODULUS);
         (uint256 b_x, uint256 b_y) = EllipticCurve.ecAdd(zG_x, zG_y, rQ_x, rQ_y, STARK_ALPHA, K_MODULUS);
-        (uint256 res_x, ) = EllipticCurve.ecMul(w, b_x, b_y, STARK_ALPHA, K_MODULUS);
+        (uint256 res_x,) = EllipticCurve.ecMul(w, b_x, b_y, STARK_ALPHA, K_MODULUS);
 
         isValid = res_x == r;
     }
