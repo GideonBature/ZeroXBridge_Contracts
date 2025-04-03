@@ -51,7 +51,7 @@ contract MockGpsStatementVerifier is IGpsStatementVerifier {
     }
 }
 
-// Test contract for AssetPricer
+// // Test contract for AssetPricer
 contract ZeroXBridgeL1Test is Test {
     ZeroXBridgeL1 public assetPricer;
     MockERC20 public dai;
@@ -61,7 +61,7 @@ contract ZeroXBridgeL1Test is Test {
     address public usdcPriceFeed;
 
     MockGpsStatementVerifier public mockVerifier;
-    MockERC20 public token;
+    //     MockERC20 public token;
 
     address public owner = address(0x1);
     address public user1 = address(0x2);
@@ -71,6 +71,7 @@ contract ZeroXBridgeL1Test is Test {
     address public admin;
     address public token1;
     address public token2;
+    MockERC20 public token;
 
     uint256 public l2TxId = 12345;
     bytes32 public commitmentHash;
@@ -716,5 +717,45 @@ contract ZeroXBridgeL1Test is Test {
 
         vm.prank(depositUser);
         assetPricer.deposit_asset(ZeroXBridgeL1.AssetType.ERC20, address(token), depositAmount, depositUser);
+    }
+
+    // tests for verifyStarknetSignature
+    function testVerifyValidSignature() public {
+        uint256 messageHash = 0x026b4b17ca6a97b0d61f441e828472022c7bec1258d488482a0a1b412c214e86;
+        uint256 r = 0x0293aba5e527bd515cca1175f2b7ed1b1ad5244db2fe780dd278561f9492ac19;
+        uint256 s = 0x075dd20d8743e6b359ef71ace06dab5934e56dac865fc586c2227b9304a273cb;
+        bytes memory sig = abi.encodePacked(bytes32(r), bytes32(s));
+        uint256 pubKeyX = 0x03f25ebd3224d52135bfb04a12713f3e3103cc25e82f0dc583177289f45a39cf;
+        uint256 pubKeyY = 0x017d8924fe415ba698958688fc37f5c60a28067ceb4dbe76107be46c871b3397;
+
+        // Call the function
+        bool isValid = assetPricer.verifyStarknetSignature(messageHash, sig, pubKeyX, pubKeyY);
+        assertTrue(isValid, "Valid signature should pass");
+    }
+
+    function testInvalidSignature() public {
+        uint256 messageHash = 0x033af3ab8b38079b8ebb228c3eb9e88ac65de29a2ae64bc90886baefeaa6b5ff;
+        // Invalid r (altered from valid)
+        uint256 r = 0x0534db24ad670b37d5bf34e583ea1c729fcf5c5928cb19bc707ee5994ffba230;
+        uint256 s = 0x07cfdcd06bc17ca67dc0b8d48c1065d0e746dcfb06fdbd96f2ea7473930617a7;
+        bytes memory sig = abi.encodePacked(bytes32(r), bytes32(s));
+        uint256 pubKeyX = 0x03f25ebd3224d52135bfb04a12713f3e3103cc25e82f0dc583177289f45a39cf;
+        uint256 pubKeyY = 0x017d8924fe415ba698958688fc37f5c60a28067ceb4dbe76107be46c871b3397;
+
+        bool isValid = assetPricer.verifyStarknetSignature(messageHash, sig, pubKeyX, pubKeyY);
+        assertFalse(isValid, "Invalid signature should fail");
+    }
+
+    function testInvalidPublicKey() public {
+        uint256 messageHash = 0x033af3ab8b38079b8ebb228c3eb9e88ac65de29a2ae64bc90886baefeaa6b5ff;
+        uint256 r = 0x0504db24ad670b37d5bf34e583ea1c729fcf5c5928cb19bc707ee5994ffba229;
+        uint256 s = 0x07cfdcd06bc17ca67dc0b8d48c1065d0e746dcfb06fdbd96f2ea7473930617a7;
+        bytes memory sig = abi.encodePacked(bytes32(r), bytes32(s));
+        // Invalid public key (not on curve)
+        uint256 pubKeyX = 0;
+        uint256 pubKeyY = 0;
+
+        vm.expectRevert("Public key not on Stark Curve");
+        assetPricer.verifyStarknetSignature(messageHash, sig, pubKeyX, pubKeyY);
     }
 }
