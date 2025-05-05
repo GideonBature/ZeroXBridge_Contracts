@@ -32,7 +32,8 @@ contract ZeroXBridgeL1Test is Test {
     MockERC20 public token;
 
     // Proof Generation
-    uint256 public user;
+    address public proofRegistry;
+    address public user;
     uint256 public amount;
     uint256 public starknetPubKey;
     uint256 public commitmentHash;
@@ -45,7 +46,7 @@ contract ZeroXBridgeL1Test is Test {
 
     event DewhitelistEvent(address indexed token);
 
-    event FundsUnlocked(address indexed user, uint256 amount, bytes32 commitmentHash);
+    event FundsUnlocked(address indexed user, uint256 amount, uint256 commitmentHash);
 
     event RelayerStatusChanged(address indexed relayer, bool status);
 
@@ -58,7 +59,7 @@ contract ZeroXBridgeL1Test is Test {
         ZeroXBridgeL1.AssetType assetType,
         uint256 amount,
         address indexed user,
-        bytes32 commitmentHash
+        uint256 commitmentHash
     );
 
     function setUp() public {
@@ -66,10 +67,11 @@ contract ZeroXBridgeL1Test is Test {
         token1 = address(0x456);
         token2 = address(0x789);
         token = new MockERC20(18);
+        proofRegistry = address(0x12345678);
 
         vm.startPrank(owner);
         // Deploy the AssetPricer contract
-        assetPricer = new ZeroXBridgeL1(admin, owner, address(token));
+        assetPricer = new ZeroXBridgeL1(admin, owner, address(token), proofRegistry);
 
         // Setup approved relayer
         assetPricer.setRelayerStatus(relayer, true);
@@ -234,7 +236,7 @@ contract ZeroXBridgeL1Test is Test {
         assetPricer.update_tvl();
     }
 
-    function registerUser(address _user, uint256 _starknetPubKey, uin256 _ethAccountPrivateKey) internal {
+    function registerUser(address _user, uint256 _starknetPubKey, uint256 _ethAccountPrivateKey) internal {
         bytes32 digest = keccak256(abi.encodePacked("UserRegistration", _user, starknetPubKey));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(_ethAccountPrivateKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
@@ -248,9 +250,7 @@ contract ZeroXBridgeL1Test is Test {
 
     function testClaimTokens() public {
         // Setup test data
-        uint256 amount = 100 ether;
-
-        vm.prank();
+        vm.prank(user);
         registerUser(user, starknetPubKey, ethAccountPrivateKey);
 
         // Simulate funds being unlocked
@@ -282,7 +282,6 @@ contract ZeroXBridgeL1Test is Test {
 
     function testFullClaimOnly() public {
         vm.startPrank(user);
-        bytes32 digest = keccak256(abi.encodePacked("UserRegistration", user, starknetPubKey));
 
         registerUser(user, starknetPubKey, ethAccountPrivateKey);
         vm.stopPrank();
@@ -313,7 +312,7 @@ contract ZeroXBridgeL1Test is Test {
 
         vm.startPrank(owner);
         // Deploy the AssetPricer contract
-        ZeroXBridgeL1 newAssetPricer = new ZeroXBridgeL1(admin, owner, address(token));
+        ZeroXBridgeL1 newAssetPricer = new ZeroXBridgeL1(admin, owner, address(token), proofRegistry);
         vm.stopPrank();
 
         // Call update_tvl
@@ -418,7 +417,7 @@ contract ZeroXBridgeL1Test is Test {
 
         // Expect the DepositEvent to be emitted
         vm.expectEmit(true, true, true, false);
-        bytes32 expectedCommitmentHash = keccak256(
+        uint256 expectedCommitmentHash = uint256(keccak256(
             abi.encodePacked(
                 uint256(ZeroXBridgeL1.AssetType.ETH),
                 address(0),
@@ -427,12 +426,12 @@ contract ZeroXBridgeL1Test is Test {
                 uint256(0), // nonce is 0 for first deposit
                 block.chainid
             )
-        );
+        ));
         emit DepositEvent(address(0), ZeroXBridgeL1.AssetType.ETH, depositAmount, user, expectedCommitmentHash);
 
         // Make the deposit as user1
         vm.prank(user);
-        bytes32 returnedHash = assetPricer.deposit_asset{value: depositAmount}(
+        uint256 returnedHash = assetPricer.deposit_asset{value: depositAmount}(
             ZeroXBridgeL1.AssetType.ETH, address(0), depositAmount, user
         );
         // Verify the correct hash was returned
@@ -464,14 +463,14 @@ contract ZeroXBridgeL1Test is Test {
         vm.prank(user);
         token.approve(address(assetPricer), depositAmount);
 
-        bytes32 expectedCommitmentHash = keccak256(
+        uint256 expectedCommitmentHash = uint256(keccak256(
             abi.encodePacked(
                 uint256(ZeroXBridgeL1.AssetType.ERC20), address(token), depositAmount, user, uint256(0), block.chainid
             )
-        );
+        ));
 
         vm.prank(user);
-        bytes32 commitmentHash_ =
+        uint256 commitmentHash_ =
             assetPricer.deposit_asset(ZeroXBridgeL1.AssetType.ERC20, address(token), depositAmount, user);
 
         assertEq(commitmentHash_, expectedCommitmentHash);
@@ -498,11 +497,11 @@ contract ZeroXBridgeL1Test is Test {
 
         // First deposit
         vm.prank(user);
-        bytes32 hash1 = assetPricer.deposit_asset(ZeroXBridgeL1.AssetType.ERC20, address(token), depositAmount, user);
+        uint256 hash1 = assetPricer.deposit_asset(ZeroXBridgeL1.AssetType.ERC20, address(token), depositAmount, user);
 
         // Second deposit
         vm.prank(user);
-        bytes32 hash2 = assetPricer.deposit_asset(ZeroXBridgeL1.AssetType.ERC20, address(token), depositAmount, user);
+        uint256 hash2 = assetPricer.deposit_asset(ZeroXBridgeL1.AssetType.ERC20, address(token), depositAmount, user);
 
         // Verify hashes are different due to different nonces
         assertTrue(hash1 != hash2, "Commitment hashes should be different");
@@ -562,11 +561,11 @@ contract ZeroXBridgeL1Test is Test {
         vm.prank(admin);
         assetPricer.registerToken(ZeroXBridgeL1.AssetType.ETH, address(0));
 
-        bytes32 expectedCommitmentHash = keccak256(
+        uint256 expectedCommitmentHash = uint256(keccak256(
             abi.encodePacked(
                 uint256(ZeroXBridgeL1.AssetType.ETH), address(0), depositAmount, user, uint256(0), block.chainid
             )
-        );
+        ));
 
         vm.expectEmit(true, true, true, true);
         emit DepositEvent(address(0), ZeroXBridgeL1.AssetType.ETH, depositAmount, user, expectedCommitmentHash);
@@ -589,11 +588,11 @@ contract ZeroXBridgeL1Test is Test {
         vm.prank(user);
         token.approve(address(assetPricer), depositAmount);
 
-        bytes32 expectedCommitmentHash = keccak256(
+        uint256 expectedCommitmentHash = uint256(keccak256(
             abi.encodePacked(
                 uint256(ZeroXBridgeL1.AssetType.ERC20), address(token), depositAmount, user, uint256(0), block.chainid
             )
-        );
+        ));
 
         vm.expectEmit(true, true, true, true);
         emit DepositEvent(address(token), ZeroXBridgeL1.AssetType.ERC20, depositAmount, user, expectedCommitmentHash);
@@ -603,7 +602,7 @@ contract ZeroXBridgeL1Test is Test {
     }
 
     // tests for verifyStarknetSignature
-    function testVerifyValidSignature() public {
+    function testVerifyValidSignature() public view {
         uint256 messageHash = 0x026b4b17ca6a97b0d61f441e828472022c7bec1258d488482a0a1b412c214e86;
         uint256 r = 0x0293aba5e527bd515cca1175f2b7ed1b1ad5244db2fe780dd278561f9492ac19;
         uint256 s = 0x075dd20d8743e6b359ef71ace06dab5934e56dac865fc586c2227b9304a273cb;
@@ -616,7 +615,7 @@ contract ZeroXBridgeL1Test is Test {
         assertTrue(isValid, "Valid signature should pass");
     }
 
-    function testInvalidSignature() public {
+    function testInvalidSignature() public view {
         uint256 messageHash = 0x033af3ab8b38079b8ebb228c3eb9e88ac65de29a2ae64bc90886baefeaa6b5ff;
         // Invalid r (altered from valid)
         uint256 r = 0x0534db24ad670b37d5bf34e583ea1c729fcf5c5928cb19bc707ee5994ffba230;

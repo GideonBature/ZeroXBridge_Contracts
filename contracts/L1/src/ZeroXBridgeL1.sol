@@ -41,6 +41,9 @@ contract ZeroXBridgeL1 is Ownable {
 
     // Maps Ethereum address to Starknet pub key
     mapping(address => uint256) public userRecord;
+    
+    // Maps Starknet pub key to Ethereum address
+    mapping(uint256 => address) public starkPubKeyRecord;
 
     // Track verified proofs to prevent replay attacks
     mapping(uint256 => bool) public verifiedProofs;
@@ -80,14 +83,14 @@ contract ZeroXBridgeL1 is Ownable {
     IERC20 public claimableToken;
 
     // Events
-    event FundsUnlocked(address indexed user, uint256 amount, bytes32 commitmentHash);
+    event FundsUnlocked(address indexed user, uint256 amount, uint256 commitmentHash);
     event RelayerStatusChanged(address indexed relayer, bool status);
     event FundsClaimed(address indexed user, uint256 amount);
     event ClaimEvent(address indexed user, uint256 amount);
     event WhitelistEvent(address indexed token);
     event DewhitelistEvent(address indexed token);
     event DepositEvent(
-        address indexed token, AssetType assetType, uint256 amount, address indexed user, bytes32 commitmentHash
+        address indexed token, AssetType assetType, uint256 amount, address indexed user, uint256 commitmentHash
     );
     event TokenRegistered(bytes32 indexed assetKey, AssetType assetType, address tokenAddress);
     event UserRegistered(address indexed user, uint256 starknetPubKey);
@@ -140,6 +143,7 @@ contract ZeroXBridgeL1 is Ownable {
         require(recoveredSigner == msg.sender, "ZeroXBridge: Invalid signature");
 
         userRecord[msg.sender] = starknetPubKey;
+        starkPubKeyRecord[starknetPubKey] = msg.sender;
         emit UserRegistered(msg.sender, starknetPubKey);
     }
 
@@ -195,17 +199,17 @@ contract ZeroXBridgeL1 is Ownable {
     /**
      * @dev Processes a burn zkProof from L2 and unlocks equivalent funds for the user
      * @param commitmentHash The hash of the commitment data that should match proof
-     * @param starknetPubkey The pubkey of address that will receive the unlocked funds
+     * @param starknetPubKey The pubkey of address that will receive the unlocked funds
      * @param amount The amount to unlock
-     * @param blockhash The block hash of L2 transaction for uniqueness
+     * @param blockHash The block hash of L2 transaction for uniqueness
      */
-    function unlock_funds_with_proof(uint256 commitmentHash, uint256 starknetPubKey, uint256 amount, uint256 blockhash)
+    function unlock_funds_with_proof(uint256 commitmentHash, uint256 starknetPubKey, uint256 amount, uint256 blockHash)
         external
     {
         require(approvedRelayers[msg.sender], "ZeroXBridge: Only approved relayers can submit proofs");
 
         // Verify that commitmentHash matches expected format based on L2 standards
-        uint256 expectedCommitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, amount, blockhash)));
+        uint256 expectedCommitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, amount, blockHash)));
 
         require(commitmentHash == expectedCommitmentHash, "ZeroXBridge: Invalid commitment hash");
 
@@ -217,6 +221,8 @@ contract ZeroXBridgeL1 is Ownable {
 
         // pass verified root into merkle manager
 
+        // get user address from starknet pubkey
+        address user = starkPubKeyRecord[starknetPubKey];
         // Store the proof hash to prevent replay attacks
         verifiedProofs[verifiedRoot] = true;
 
@@ -265,7 +271,7 @@ contract ZeroXBridgeL1 is Ownable {
     function deposit_asset(AssetType assetType, address tokenAddress, uint256 amount, address user)
         external
         payable
-        returns (bytes32)
+        returns (uint256)
     {
         require(amount > 0, "ZeroXBridge: Amount must be greater than zero");
         require(user != address(0), "ZeroXBridge: Invalid user address");
@@ -295,8 +301,8 @@ contract ZeroXBridgeL1 is Ownable {
         nextDepositNonce[user] = nonce + 1;
 
         // Generate commitment hash
-        bytes32 commitmentHash =
-            keccak256(abi.encodePacked(uint256(assetType), tokenAddress, amount, user, nonce, block.chainid));
+        uint256 commitmentHash =
+            uint256(keccak256(abi.encodePacked(uint256(assetType), tokenAddress, amount, user, nonce, block.chainid)));
 
         // Emit deposit event
         emit DepositEvent(tokenAddress, assetType, amount, user, commitmentHash);
@@ -347,7 +353,7 @@ contract ZeroXBridgeL1 is Ownable {
      */
     function recoverSigner(address ethAddress, bytes calldata signature, uint256 starknetPubKey)
         internal
-        view
+        pure
         returns (address recoveredAddress)
     {
         require(ethAddress != address(0), "Invalid ethAddress");
@@ -421,7 +427,7 @@ contract ZeroXBridgeL1 is Ownable {
      * @return x3 Resulting X-coordinate
      * @return y3 Resulting Y-coordinate
      */
-    function ecAdd(uint256 x1, uint256 y1, uint256 x2, uint256 y2) internal view returns (uint256 x3, uint256 y3) {
+    function ecAdd(uint256 x1, uint256 y1, uint256 x2, uint256 y2) internal pure returns (uint256 x3, uint256 y3) {
         if (x1 == 0 && y1 == 0) return (x2, y2);
         if (x2 == 0 && y2 == 0) return (x1, y1);
         if (x1 == x2 && addmod(y1, y2, K_MODULUS) == 0) return (0, 0);
@@ -447,7 +453,7 @@ contract ZeroXBridgeL1 is Ownable {
      * @return x2 Resulting X-coordinate
      * @return y2 Resulting Y-coordinate
      */
-    function ecDouble(uint256 x, uint256 y) internal view returns (uint256 x2, uint256 y2) {
+    function ecDouble(uint256 x, uint256 y) internal pure returns (uint256 x2, uint256 y2) {
         if (y == 0) return (0, 0);
         uint256 xMod = x % K_MODULUS;
         uint256 yMod = y % K_MODULUS;
@@ -468,7 +474,7 @@ contract ZeroXBridgeL1 is Ownable {
      * @return xR Resulting X-coordinate
      * @return yR Resulting Y-coordinate
      */
-    function ecMul(uint256 scalar, uint256 x, uint256 y) internal view returns (uint256 xR, uint256 yR) {
+    function ecMul(uint256 scalar, uint256 x, uint256 y) internal pure returns (uint256 xR, uint256 yR) {
         xR = 0;
         yR = 0;
         uint256 scalarMod = scalar % STARK_N;
@@ -496,7 +502,7 @@ contract ZeroXBridgeL1 is Ownable {
         bytes calldata starknetSig,
         uint256 starkPubKeyX,
         uint256 starkPubKeyY
-    ) public view returns (bool isValid) {
+    ) public pure returns (bool isValid) {
         require(starknetSig.length == 64, "Invalid signature length");
         uint256 r = uint256(bytes32(starknetSig[0:32]));
         uint256 s = uint256(bytes32(starknetSig[32:64]));

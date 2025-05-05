@@ -28,8 +28,9 @@ contract ZeroXBridgeTest is Test {
     address public relayer = address(0x4);
     address public nonRelayer = address(0x5);
     uint256 public blockHash = 0x0123456;
+    address public proofRegistry = address(0x123235345345);
 
-    event FundsUnlocked(address indexed user, uint256 amount, bytes32 commitmentHash);
+    event FundsUnlocked(address indexed user, uint256 amount, uint256 commitmentHash);
 
     event RelayerStatusChanged(address indexed relayer, bool status);
 
@@ -45,7 +46,7 @@ contract ZeroXBridgeTest is Test {
 
         // Initialize bridge with mock verifier
         address admin = address(0x123);
-        bridge = new ZeroXBridgeL1(admin, owner, address(token));
+        bridge = new ZeroXBridgeL1(admin, owner, address(token), proofRegistry);
 
         // Setup approved relayer
         bridge.setRelayerStatus(relayer, true);
@@ -98,7 +99,6 @@ contract ZeroXBridgeTest is Test {
 
     function testOnlyApprovedRelayersCanSubmitProofs() public {
         uint256 amount = 1 ether;
-        uint256 l2TxId = 12345;
         uint256 commitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, amount, blockHash)));
 
         // Non-relayer attempt should fail
@@ -132,8 +132,6 @@ contract ZeroXBridgeTest is Test {
         assertEq(bridge.claimableFunds(user), amount);
 
         // Verify the proof and commitment are marked as used
-        bytes32 proofHash = keccak256(abi.encodePacked(proof));
-        assertTrue(bridge.verifiedProofs(proofHash));
         assertTrue(bridge.verifiedProofs(commitmentHash));
     }
 
@@ -154,7 +152,7 @@ contract ZeroXBridgeTest is Test {
     function testInvalidCommitmentHash() public {
         uint256 amount = 1 ether;
         // Deliberately create wrong commitment hash
-        bytes32 wrongCommitmentHash = keccak256(abi.encodePacked("wrong data"));
+        uint256 wrongCommitmentHash = uint256(keccak256(abi.encodePacked("wrong data")));
 
         vm.prank(relayer);
         vm.expectRevert("ZeroXBridge: Invalid commitment hash");
@@ -168,7 +166,7 @@ contract ZeroXBridgeTest is Test {
     function testPreventProofReuse() public {
         uint256 amount = 1 ether;
         blockHash = 0x0123456;
-        commitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, amount, blockHash)));
+        uint256 commitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, amount, blockHash)));
 
         // First attempt should succeed
         vm.prank(relayer);
@@ -183,7 +181,7 @@ contract ZeroXBridgeTest is Test {
     function testPreventCommitmentReuse() public {
         uint256 amount = 1 ether;
         blockHash = 0x0123456;
-        commitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, amount, blockHash)));
+        uint256 commitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, amount, blockHash)));
 
         // First attempt should succeed
         vm.prank(relayer);
@@ -199,14 +197,14 @@ contract ZeroXBridgeTest is Test {
     // Claim Function Tests
     // ========================
 
-    function registerUser(address user, uint256 starknetPubKey, uint256 ethAccountPrivateKey) internal {
-        bytes32 digest = keccak256(abi.encodePacked("UserRegistration", user, starknetPubKey));
+    function registerUser(address _user, uint256 _starknetPubKey, uint256 _ethAccountPrivateKey) internal {
+        bytes32 digest = keccak256(abi.encodePacked("UserRegistration", _user, _starknetPubKey));
 
         // vm.startPrank(user);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_ethAccountPrivateKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        bridge.registerUser(signature, starknetPubKey);
+        bridge.registerUser(signature, _starknetPubKey);
         // vm.stopPrank();
     }
 
