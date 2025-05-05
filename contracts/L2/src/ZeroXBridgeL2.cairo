@@ -52,7 +52,7 @@ pub mod ZeroXBridgeL2 {
     pub enum Event {
         BurnEvent: BurnEvent,
         MintEvent: MintEvent,
-        CommitmentVerifiedEvent: CommitmentVerifiedEvent,
+
     }
 
     #[derive(Drop, Debug, starknet::Event)]
@@ -71,11 +71,7 @@ pub mod ZeroXBridgeL2 {
         pub commitment_hash: felt252,
     }
 
-    #[derive(Drop, Debug, starknet::Event)]
-    pub struct CommitmentVerifiedEvent {
-        pub deposit_commitment_hash: felt252,
-        pub merkle_root: felt252,
-    }
+  
 
     #[constructor]
     fn constructor(
@@ -122,7 +118,7 @@ pub mod ZeroXBridgeL2 {
                 !self.verified_commitments.read(commitment_hash), 'Commitment already processed',
             );
 
-            assert(proof.len() >= 3, 'Proof too short');
+            assert(proof.len() >= 4, 'Proof too short');
 
             let recipient_felt = *proof.at(0);
             let amount_low = *proof.at(1);
