@@ -1,8 +1,8 @@
 #[starknet::interface]
 pub trait IZeroXBridgeL2<TContractState> {
     fn burn_xzb_for_unlock(ref self: TContractState, amount: core::integer::u256);
-    /// The proof structure assumes the first three elements contain recipient, amount_low, and
-    /// amount_high.
+    /// The proof structure assumes the first four elements contain recipient, amount_low, and
+    /// amount_high, block_hash
     fn process_mint_proof(
         ref self: TContractState, proof: Array<felt252>, commitment_hash: felt252,
     );
@@ -10,8 +10,6 @@ pub trait IZeroXBridgeL2<TContractState> {
 
 #[starknet::contract]
 pub mod ZeroXBridgeL2 {
-    use integrity::IntegrityWithConfigTrait;
-    use integrity::IntegrityTrait;
     use starknet::{ContractAddress, get_caller_address};
     use l2::xZBERC20::{
         IBurnableDispatcher, IBurnableDispatcherTrait, IMintableDispatcher,
@@ -23,14 +21,15 @@ pub mod ZeroXBridgeL2 {
         StorageMapWriteAccess,
     };
     use core::hash::{HashStateTrait, HashStateExTrait};
-    use integrity::{Integrity, IntegrityWithConfig, VerifierConfiguration};
+    use l2::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
 
     #[storage]
     struct Storage {
         xzb_token: ContractAddress,
-        facts_registery_address: ContractAddress,
+        proof_registry_address: ContractAddress,
         security_bits: u32,
         verified_commitments: Map<felt252, bool>,
+        verified_roots: Map<felt252, felt252>,
     }
 
     #[derive(Drop, Hash)]
@@ -45,6 +44,7 @@ pub mod ZeroXBridgeL2 {
         pub recipient: felt252,
         pub amount_low: felt252,
         pub amount_high: felt252,
+        pub block_hash: felt252,
     }
 
     #[event]
@@ -52,6 +52,7 @@ pub mod ZeroXBridgeL2 {
     pub enum Event {
         BurnEvent: BurnEvent,
         MintEvent: MintEvent,
+        CommitmentVerifiedEvent: CommitmentVerifiedEvent,
     }
 
     #[derive(Drop, Debug, starknet::Event)]
@@ -70,15 +71,21 @@ pub mod ZeroXBridgeL2 {
         pub commitment_hash: felt252,
     }
 
+    #[derive(Drop, Debug, starknet::Event)]
+    pub struct CommitmentVerifiedEvent {
+        pub deposit_commitment_hash: felt252,
+        pub merkle_root: felt252,
+    }
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
         token: ContractAddress,
-        facts_registery_address: ContractAddress,
+        proof_registry_address: ContractAddress,
         security_bits: u32,
     ) {
         self.xzb_token.write(token);
-        self.facts_registery_address.write(facts_registery_address);
+        self.proof_registry_address.write(proof_registry_address);
         self.security_bits.write(security_bits);
     }
 
@@ -115,53 +122,34 @@ pub mod ZeroXBridgeL2 {
                 !self.verified_commitments.read(commitment_hash), 'Commitment already processed',
             );
 
-            let facts_registery = self.facts_registery_address.read();
-            let integrity = Integrity::from_address(facts_registery);
-
-            let config = VerifierConfiguration {
-                layout: 'recursive_with_poseidon',
-                hasher: 'keccak_160_lsb',
-                stone_version: 'stone6',
-                memory_verification: 'relaxed',
-            };
-
-            let integrity_with_config = integrity.with_config(config, self.security_bits.read());
-            assert(integrity_with_config.is_fact_hash_valid(commitment_hash), 'Invalid proof');
-
-            self.verified_commitments.write(commitment_hash, true);
             assert(proof.len() >= 3, 'Proof too short');
 
             let recipient_felt = *proof.at(0);
             let amount_low = *proof.at(1);
             let amount_high = *proof.at(2);
+            let block_hash = *proof.at(3);
 
-            let recipient: ContractAddress = recipient_felt.try_into().unwrap();
-            let amount = core::integer::u256 {
-                low: amount_low.try_into().unwrap(), high: amount_high.try_into().unwrap(),
+            let mint_data = MintData {
+                recipient: recipient_felt, amount_low, amount_high, block_hash,
             };
-
-            let mint_data = MintData { recipient: recipient_felt, amount_low, amount_high };
-
-            // At this point, the process should have went like this:
-            // (before calling the process_mint_proof)
-            // - 1. User generates a STARK proof with the `stone-prover`
-            // - 2. User serializes the proof into calldata alongside with the verifier config
-            // (reference:
-            // https://github.com/HerodotusDev/integrity/?tab=readme-ov-file#monolith-proof)
-            // - 3. Register the proof on Integrity's FactRegistry contract, verifier verifies that
-            // the proof is valid
-            // (https://github.com/HerodotusDev/integrity/blob/main/deployed_contracts.md)
-            //      and it computes our serialized calldata into a verification hash and stores it.
-            // (calling the process_mint_proof)
-            // - 4. Now that we have registered our fact, we call Inegrity's `is_fact_hash_valid()`
-            // function with our commitment hash,
-            //      if it is valid it finds a matching verification hash for it, it will return
-            //      `true`
-            // - 5. lastly, in this code we assert that the commitment hash matches what we want to
-            // prove (L145)
 
             let computed_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
             assert(computed_hash == commitment_hash, 'Proof does not match commitment');
+
+            let proof_registry = IProofRegistryDispatcher {
+                contract_address: self.proof_registry_address.read(),
+            };
+
+            let merkle_root = proof_registry.get_verified_merkle_root(commitment_hash);
+
+            self.verified_commitments.write(commitment_hash, true);
+            self.verified_roots.write(commitment_hash, merkle_root);
+
+            let recipient: ContractAddress = recipient_felt.try_into().unwrap();
+
+            let amount = core::integer::u256 {
+                low: amount_low.try_into().unwrap(), high: amount_high.try_into().unwrap(),
+            };
 
             let token_addr = self.xzb_token.read();
             IMintableDispatcher { contract_address: token_addr }.mint(recipient, amount);
