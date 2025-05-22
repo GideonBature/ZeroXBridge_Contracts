@@ -5,8 +5,8 @@ use snforge_std::{
     ContractClassTrait, EventSpyAssertionsTrait, spy_events,
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
-use l2::DAO::{IDAODispatcher, IDAODispatcherTrait, ProposalStatus, DAO};
-use l2::xZBERC20::{IMintableDispatcher, IMintableDispatcherTrait};
+use l2::dao::DAO::{IDAODispatcher, IDAODispatcherTrait, ProposalStatus, DAO};
+use l2::core::xZBERC20::{IMintableDispatcher, IMintableDispatcherTrait};
 
 const DEFAULT_BINDING_THRESHOLD: u256 = 1_000_000;
 
