@@ -1,4 +1,4 @@
-use l2::xZBERC20::{
+use l2::core::xZBERC20::{
     IBurnableDispatcher, IBurnableDispatcherTrait, IMintableDispatcher, IMintableDispatcherTrait,
     MINTER_ROLE,
 };

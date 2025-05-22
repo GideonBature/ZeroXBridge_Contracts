@@ -13,6 +13,17 @@ pub trait IBurnable<TContractState> {
     fn burn(ref self: TContractState, amount: u256);
 }
 
+#[starknet::interface]
+pub trait ISupply<TContractState> {
+    fn total_supply(self: @TContractState) -> u256;
+}
+
+#[starknet::interface]
+pub trait IManager<TContractState> {
+    fn set_bridge_address(ref self: TContractState, bridge: ContractAddress);
+    fn get_bridge_address(self: @TContractState) -> ContractAddress;
+}
+
 pub const MINTER_ROLE: felt252 = selector!("MINTER_ROLE");
 pub const UPGRADER_ROLE: felt252 = selector!("UPGRADER_ROLE");
 
@@ -25,7 +36,9 @@ pub mod xZBERC20 {
     use openzeppelin_upgrades::interface::IUpgradeable;
     use starknet::{ClassHash, ContractAddress, get_caller_address};
 
-    use super::{IBurnable, IMintable};
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+
+    use super::{IBurnable, IMintable, IManager};
     use super::{MINTER_ROLE, UPGRADER_ROLE};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
@@ -56,6 +69,7 @@ pub mod xZBERC20 {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
+        bridge: ContractAddress,
     }
 
     #[event]
@@ -94,6 +108,19 @@ pub mod xZBERC20 {
         fn burn(ref self: ContractState, amount: u256) {
             let burner = get_caller_address();
             self.erc20.burn(burner, amount);
+        }
+    }
+
+
+    #[abi(embed_v0)]
+    impl ManagerImpl of IManager<ContractState> {
+        fn set_bridge_address(ref self: ContractState, bridge: ContractAddress) {
+            self.accesscontrol.grant_role(MINTER_ROLE, bridge);
+            self.bridge.write(bridge);
+        }
+
+        fn get_bridge_address(self: @ContractState) -> ContractAddress {
+            self.bridge.read()
         }
     }
 

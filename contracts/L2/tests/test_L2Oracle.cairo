@@ -6,7 +6,7 @@ mod tests {
         declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
         stop_cheat_caller_address, EventSpyAssertionsTrait, spy_events,
     };
-    use l2::L2Oracle::{L2Oracle, IL2OracleDispatcher, IL2OracleDispatcherTrait};
+    use l2::core::L2Oracle::{L2Oracle, IL2OracleDispatcher, IL2OracleDispatcherTrait};
 
     // Helper function to deploy the contract
     fn deploy_contract() -> (ContractAddress, ContractAddress) {

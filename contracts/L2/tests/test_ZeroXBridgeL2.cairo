@@ -1,12 +1,18 @@
 use snforge_std::{
     declare, spy_events, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, CheatSpan,
-    cheat_caller_address, EventSpyTrait,
+    cheat_caller_address,
 };
 
-use l2::ZeroXBridgeL2::{IZeroXBridgeL2Dispatcher, IZeroXBridgeL2DispatcherTrait};
-use l2::ZeroXBridgeL2::ZeroXBridgeL2::{Event, BurnEvent, BurnData// MintData, MintEvent
+use l2::core::ZeroXBridgeL2::{
+    IZeroXBridgeL2Dispatcher, IZeroXBridgeL2DispatcherTrait, IDynamicRateDispatcher,
+    IDynamicRateDispatcherTrait,
 };
-use l2::xZBERC20::{IMintableDispatcher, IMintableDispatcherTrait};
+use l2::core::ZeroXBridgeL2::ZeroXBridgeL2::{Event, BurnEvent, BurnData, MintEvent, MintData};
+use l2::core::xZBERC20::{
+    IMintableDispatcher, IMintableDispatcherTrait, IManagerDispatcher, IManagerDispatcherTrait,
+};
+use l2::core::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
+use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTrait};
 use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use starknet::{ContractAddress, contract_address_const};
 use core::integer::u256;
@@ -14,20 +20,33 @@ use core::pedersen::PedersenTrait;
 use core::hash::{HashStateTrait, HashStateExTrait};
 use openzeppelin_utils::serde::SerializedAppend;
 
-/// Security bits for testing
-const SECURITY_BITS: u32 = 48;
+const MIN_RATE: u256 = 100000; // 0.1 (with PRECISION = 1000000)
+const MAX_RATE: u256 = 5000000; // 5.0 (with PRECISION = 1000000)
+const PRECISION: u256 = 1000000; // 6 decimals for rate precision
 
 fn alice() -> ContractAddress {
     contract_address_const::<'alice'>()
 }
 
-fn mocked_facts_registry() -> ContractAddress {
-    contract_address_const::<0x02fd1f617a9caeeeadd0cd7da2d99391ee9dd9ad6c5cd1960e3034ffdfad3ae1>()
-}
-
+// Helper functions to get test addresses
 fn owner() -> ContractAddress {
     contract_address_const::<'owner'>()
 }
+
+
+fn block_hash() -> felt252 {
+    00000000000000000000011111111111111111111122222222222222222222222222222222
+}
+
+fn merkle_root() -> felt252 {
+    00000000000000000000011111111111111111111122222222222222222222222222222222
+}
+
+fn non_owner() -> ContractAddress {
+    contract_address_const::<'non_owner'>()
+}
+
+// 1,000,000,000,000,000
 
 fn deploy_xzb() -> ContractAddress {
     let contract_class = declare("xZBERC20").unwrap().contract_class();
@@ -37,37 +56,69 @@ fn deploy_xzb() -> ContractAddress {
     contract_address
 }
 
-fn deploy_bridge(xzb_addr: ContractAddress) -> ContractAddress {
+fn deploy_registry() -> ContractAddress {
+    let contract_class = declare("MockProofRegistry").unwrap().contract_class();
+    let mut calldata = array![];
+    let (contract_address, _) = contract_class.deploy(@calldata).unwrap();
+    contract_address
+}
+
+fn deploy_oracle() -> ContractAddress {
+    let contract_class = declare("MockL2Oracle").unwrap().contract_class();
+    let mut calldata = array![];
+    calldata.append_serde(owner());
+    let (contract_address, _) = contract_class.deploy(@calldata).unwrap();
+    contract_address
+}
+
+fn deploy_bridge(
+    xzb_addr: ContractAddress, proof_registry: ContractAddress, oracle_address: ContractAddress,
+) -> ContractAddress {
     let contract_class = declare("ZeroXBridgeL2").unwrap().contract_class();
     let mut calldata = array![];
+    calldata.append_serde(owner());
     calldata.append_serde(xzb_addr);
-    calldata.append_serde(mocked_facts_registry());
-    calldata.append_serde(SECURITY_BITS);
+    calldata.append_serde(proof_registry);
+    calldata.append_serde(oracle_address);
+    calldata.append_serde(MIN_RATE);
+    calldata.append_serde(MAX_RATE);
     let (contract_address, _) = contract_class.deploy(@calldata).unwrap();
+
+    // Give Bridge minter role
+    cheat_caller_address(xzb_addr, owner(), CheatSpan::TargetCalls(1));
+    IManagerDispatcher { contract_address: xzb_addr }.set_bridge_address(contract_address);
+
     contract_address
 }
 
 #[test]
 fn test_burn_xzb_for_unlock_happy_path() {
     let token_addr = deploy_xzb();
-    let bridge_addr = deploy_bridge(token_addr);
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
     let alice_addr = alice();
     let owner_addr = owner();
 
     // Mint tokens to Alice.
-    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 1000);
+    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(2));
+    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 20000);
+
+    let balance = IERC20Dispatcher { contract_address: token_addr }.balance_of(alice_addr);
+    assert!(balance == 20000, "Bridge balance not updated");
 
     // Burn tokens through bridge with alice as caller.
     let mut spy = spy_events();
-    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
     cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
-    let amount: u256 = u256 { low: 500, high: 0 };
+    let amount = 10000_u256;
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(amount);
-
     // Compute expected commitment hash.
     let data_to_hash = BurnData {
-        caller: alice_addr.try_into().unwrap(), amount_low: 500, amount_high: 0,
+        caller: alice_addr.try_into().unwrap(),
+        amount_low: amount.low.try_into().unwrap(),
+        amount_high: amount.high.try_into().unwrap(),
     };
     let expected_hash = PedersenTrait::new(0).update_with(data_to_hash).finalize();
 
@@ -76,9 +127,9 @@ fn test_burn_xzb_for_unlock_happy_path() {
         bridge_addr,
         Event::BurnEvent(
             BurnEvent {
-                user: alice_addr.try_into().unwrap(),
-                amount_low: 500,
-                amount_high: 0,
+                user: alice_addr,
+                amount_low: amount.low.into(),
+                amount_high: amount.high.into(),
                 commitment_hash: expected_hash,
             },
         ),
@@ -92,7 +143,10 @@ fn test_burn_xzb_for_unlock_happy_path() {
 fn test_burn_xzb_updates_balance() {
     // Verify that burning xZB tokens updates the user's balance correctly.
     let token_addr = deploy_xzb();
-    let bridge_addr = deploy_bridge(token_addr);
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
     let alice_addr = alice();
     let owner_addr = owner();
 
@@ -107,7 +161,7 @@ fn test_burn_xzb_updates_balance() {
     // Burn tokens through bridge.
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
     cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
-    let amount: u256 = u256 { low: 500, high: 0 };
+    let amount = 500_u256;
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(amount);
 
     // Check balance after burn.
@@ -116,43 +170,14 @@ fn test_burn_xzb_updates_balance() {
 }
 
 #[test]
-fn test_commitment_hash_consistency() {
-    // Verify that for a fixed caller and burn amount, the commitment hash is consistent.
-    let token_addr = deploy_xzb();
-    let bridge_addr = deploy_bridge(token_addr);
-    let alice_addr = alice();
-    let owner_addr = owner();
-
-    // Mint tokens to Alice.
-    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 1000);
-
-    // Burn tokens via bridge.
-    let mut spy = spy_events();
-    // Burn tokens through bridge.
-    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
-    let amount: u256 = u256 { low: 500, high: 0 };
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(amount);
-
-    // Compute expected hash using BurnData.
-    let data_to_hash = BurnData {
-        caller: alice_addr.try_into().unwrap(), amount_low: 500, amount_high: 0,
-    };
-    let expected = PedersenTrait::new(0).update_with(data_to_hash).finalize();
-    println!("Expected commitment hash: {:?}", expected);
-    // Retrieve the emitted event and compare commitment hash.
-    let events = spy.get_events();
-    let (_emitter, evt) = events.events.at(1);
-    assert(evt.data.at(3) == @expected, 'hash does not match');
-}
-
-#[test]
 #[should_panic(expected: 'ERC20: insufficient balance')]
 fn test_burn_xzb_insufficient_balance() {
     // Test that burning more tokens than available triggers an error.
     let token_addr = deploy_xzb();
-    let bridge_addr = deploy_bridge(token_addr);
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
     let alice_addr = alice();
     let owner_addr = owner();
 
@@ -166,139 +191,162 @@ fn test_burn_xzb_insufficient_balance() {
     let amount: u256 = u256 { low: 500, high: 0 };
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(amount);
 }
-// #[test]
-// #[fork("SEPOLIA_LATEST")]
-// fn test_process_mint_proof_happy_path() {
-//     // Setup environment
-//     let token_addr = deploy_xzb();
-//     let bridge_addr = deploy_bridge(token_addr);
-//     let recipient_addr = alice();
-//     let owner = owner();
 
-//     // Create test data
-//     let amount: u256 = u256 { low: 500, high: 0 };
 
-//     // Create mock proof array (recipient, amount_low, amount_high)
-//     let mut proof = array![];
-//     proof.append(recipient_addr.into());
-//     proof.append(amount.low.into());
-//     proof.append(amount.high.into());
+#[test]
+fn test_process_mint_proof_happy_path() {
+    // Setup environment
+    let token_addr = deploy_xzb();
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
 
-//     // Create commitment hash from mint data
-//     let mint_data = MintData {
-//         recipient: recipient_addr.into(),
-//         amount_low: amount.low.into(),
-//         amount_high: amount.high.into(),
-//     };
-//     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+    let recipient_addr = alice();
+    let owner = owner();
 
-//     // Create spy to track events
-//     let mut spy = spy_events();
+    // Create test data
+    let amount: u256 = 10000_u256 * PRECISION; // 10,000 USD
 
-//     // Mock integrity verification to return true
-//     // Note: In real tests, you would need to either:
-//     // 1. Use real integrity verification with valid proofs
-//     // 2. Mock the integrity dependency more thoroughly
-//     // For this example, we'll assume integrity verification passes
+    // Create mock proof array (recipient, amount_low, amount_high, block_hash)
+    let mut proof = array![];
+    proof.append(recipient_addr.into());
+    proof.append(amount.low.into());
+    proof.append(amount.high.into());
+    proof.append(block_hash());
 
-//     // Process the mint proof
+    // Create commitment hash from mint data
+    let mint_data = MintData {
+        recipient: recipient_addr.into(),
+        amount_low: amount.low.into(),
+        amount_high: amount.high.into(),
+        block_hash: block_hash(),
+    };
+    let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 
-//     cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
-//     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
-//     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-//         .process_mint_proof(proof, commitment_hash);
+    // Create spy to track events
+    let mut spy = spy_events();
 
-//     // Build expected event
-//     let expected_event = (
-//         bridge_addr,
-//         Event::MintEvent(
-//             MintEvent {
-//                 recipient: recipient_addr,
-//                 amount_low: amount.low.into(),
-//                 amount_high: amount.high.into(),
-//                 commitment_hash,
-//             },
-//         ),
-//     );
+    // Mock integrity verification to return true
+    // Note: In real tests, you would need to either:
+    // 1. Use real integrity verification with valid proofs
+    // 2. Mock the integrity dependency more thoroughly
+    // For this example, we'll assume integrity verification passes
+    // Process the mint proof
 
-//     // Assert event was emitted
-//     spy.assert_emitted(@array![expected_event]);
+    IMockRegistryDispatcher { contract_address: proof_registry_addr }.set_should_succeed(true);
+    IProofRegistryDispatcher { contract_address: proof_registry_addr }
+        .register_deposit_proof(commitment_hash, merkle_root());
 
-//     // Verify tokens were minted correctly
-//     let erc20 = IERC20Dispatcher { contract_address: token_addr };
-//     let balance = erc20.balance_of(recipient_addr);
-//     assert(balance == amount, 'Tokens not minted correctly');
-// }
+    // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
+    cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
 
-// #[test]
-// #[fork("SEPOLIA_LATEST")]
-// #[should_panic(expected: 'Commitment already processed')]
-// fn test_duplicate_commitment_rejection() {
-//     // Setup environment
-//     let token_addr = deploy_xzb();
-//     let bridge_addr = deploy_bridge(token_addr);
-//     let recipient_addr = alice();
-//     let owner = owner();
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .mint_and_claim_xzb(proof, commitment_hash);
 
-//     // Create test data
-//     let amount: u256 = u256 { low: 500, high: 0 };
+    // Build expected event
+    let expected_event = (
+        bridge_addr,
+        Event::MintEvent(
+            MintEvent {
+                recipient: recipient_addr,
+                amount_low: amount.low.into(),
+                amount_high: amount.high.into(),
+                commitment_hash,
+            },
+        ),
+    );
+    // Assert event was emitted
+    spy.assert_emitted(@array![expected_event]);
 
-//     // Create mock proof
-//     let mut proof = array![];
-//     proof.append(recipient_addr.into());
-//     proof.append(amount.low.into());
-//     proof.append(amount.high.into());
-//     // Create commitment hash from mint data
-//     let mint_data = MintData {
-//         recipient: recipient_addr.into(),
-//         amount_low: amount.low.into(),
-//         amount_high: amount.high.into(),
-//     };
-//     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+    // Verify tokens were minted correctly
+    let erc20 = IERC20Dispatcher { contract_address: token_addr };
+    let balance = erc20.balance_of(recipient_addr);
 
-//     // Process the mint proof first time (should succeed)
+    let mint_rate = IDynamicRateDispatcher { contract_address: bridge_addr }
+        .get_dynamic_rate(amount);
 
-//     cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(2));
-//     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(2));
-//     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-//         .process_mint_proof(proof.clone(), commitment_hash);
+    let mint_amount = (amount * mint_rate) / PRECISION / PRECISION;
 
-//     // Try to process the same proof again (should fail)
-//     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-//         .process_mint_proof(proof, commitment_hash);
-// }
+    assert(balance == mint_amount, 'Tokens not minted correctly');
+}
+#[test]
+#[should_panic(expected: 'Commitment already processed')]
+fn test_duplicate_commitment_rejection() {
+    // Setup environment
+    let token_addr = deploy_xzb();
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
 
-// #[test]
-// #[fork("SEPOLIA_LATEST")]
-// #[should_panic(expected: 'Proof too short')]
-// fn test_insufficient_proof_data() {
-//     // Setup environment
-//     let token_addr = deploy_xzb();
-//     let bridge_addr = deploy_bridge(token_addr);
-//     let owner = owner();
-//     let recipient_addr = alice();
+    let recipient_addr = alice();
+    let owner = owner();
 
-//     // Create an incomplete proof (less than 3 elements)
-//     let mut proof = array![];
-//     proof.append(123);
-//     proof.append(456);
-//     // Missing third element
+    // Create test data
+    let amount: u256 = 10000_u256 * PRECISION; // 10,000 USD
 
-//     // Create test data
-//     let amount: u256 = u256 { low: 500, high: 0 };
+    // Create mock proof array (recipient, amount_low, amount_high, block_hash)
+    let mut proof = array![];
+    proof.append(recipient_addr.into());
+    proof.append(amount.low.into());
+    proof.append(amount.high.into());
+    proof.append(block_hash());
 
-//     // Create commitment hash from mint data
-//     let mint_data = MintData {
-//         recipient: recipient_addr.into(),
-//         amount_low: amount.low.into(),
-//         amount_high: amount.high.into(),
-//     };
-//     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+    // Create commitment hash from mint data
+    let mint_data = MintData {
+        recipient: recipient_addr.into(),
+        amount_low: amount.low.into(),
+        amount_high: amount.high.into(),
+        block_hash: block_hash(),
+    };
+    let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 
-//     cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
-//     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
-//     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-//         .process_mint_proof(proof, commitment_hash);
-// }
+    IMockRegistryDispatcher { contract_address: proof_registry_addr }.set_should_succeed(true);
+    IProofRegistryDispatcher { contract_address: proof_registry_addr }
+        .register_deposit_proof(commitment_hash, merkle_root());
 
+    // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
+    cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
+
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .mint_and_claim_xzb(proof.clone(), commitment_hash);
+
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .mint_and_claim_xzb(proof, commitment_hash);
+}
+
+#[test]
+#[should_panic(expected: 'Proof too short')]
+fn test_insufficient_proof_data() {
+    // Setup environment
+    let token_addr = deploy_xzb();
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
+    let owner = owner();
+    let recipient_addr = alice();
+
+    // Create an incomplete proof (less than 3 elements)
+    let mut proof = array![];
+    proof.append(123);
+    proof.append(456);
+    // Missing third nd 4th element
+
+    // Create test data
+    let amount: u256 = 10000_u256 * PRECISION; // 10,000 USD
+
+    // Create commitment hash from mint data
+    let mint_data = MintData {
+        recipient: recipient_addr.into(),
+        amount_low: amount.low.into(),
+        amount_high: amount.high.into(),
+        block_hash: block_hash(),
+    };
+    let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+
+    // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
+    cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .mint_and_claim_xzb(proof, commitment_hash);
+}
 

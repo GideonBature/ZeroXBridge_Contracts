@@ -7,6 +7,8 @@ pub trait IProofRegistry<TContractState> {
     // Get the merkle root of commitment hash if it was verified.
     fn get_verified_merkle_root(self: @TContractState, commitment_hash: felt252) -> felt252;
 
+    fn check_proof(self: @TContractState, commitment_hash: felt252, merkle_root: felt252) -> bool;
+
     // Prove given commitment_hash with proof verified by Integrity.
     fn register_deposit_proof(
         ref self: TContractState, commitment_hash: felt252, merkle_root: felt252,
@@ -98,18 +100,25 @@ mod ProofRegistry {
             self.verified_deposit_roots.entry(commitment_hash).read().expect('Not found')
         }
 
-        fn register_deposit_proof(
-            ref self: ContractState, commitment_hash: felt252, merkle_root: felt252,
-        ) {
+        fn check_proof(
+            self: @ContractState, commitment_hash: felt252, merkle_root: felt252,
+        ) -> bool {
             let (config, security_bits) = get_config(CAIRO1_LAYOUT);
 
             let fact_hash = get_cairo1_fact_hash(commitment_hash, merkle_root);
 
-            // Integrity package provides functions for easier checking if given fact is verified.
             let integrity = Integrity::new();
             let is_valid = integrity
                 .with_config(config, security_bits)
                 .is_fact_hash_valid(fact_hash);
+
+            is_valid
+        }
+
+        fn register_deposit_proof(
+            ref self: ContractState, commitment_hash: felt252, merkle_root: felt252,
+        ) {
+            let is_valid = self.check_proof(commitment_hash, merkle_root);
 
             assert(is_valid, 'Proof not verified');
 
