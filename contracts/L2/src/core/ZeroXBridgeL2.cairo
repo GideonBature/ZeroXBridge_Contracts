@@ -14,7 +14,7 @@ pub trait IZeroXBridgeL2<TContractState> {
 
 #[starknet::interface]
 pub trait IDynamicRate<TContractState> {
-    fn get_dynamic_rate(self: @TContractState, tvl: u256) -> u256;
+    fn get_dynamic_rate(self: @TContractState) -> u256;
     fn get_current_xzb_supply(self: @TContractState) -> u256;
     fn set_rates(ref self: TContractState, min_rate: Option<u256>, max_rate: Option<u256>);
     fn set_oracle(ref self: TContractState, oracle: ContractAddress);
@@ -28,17 +28,18 @@ pub mod ZeroXBridgeL2 {
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin_upgrades::UpgradeableComponent;
     use openzeppelin_upgrades::interface::IUpgradeable;
-    use starknet::{ContractAddress, get_caller_address, ClassHash};
+    use starknet::{
+        ContractAddress, get_caller_address, ClassHash, get_block_timestamp, get_contract_address,
+    };
     use l2::core::xZBERC20::{
         IBurnableDispatcher, IBurnableDispatcherTrait, IMintableDispatcher,
         IMintableDispatcherTrait, ISupplyDispatcher, ISupplyDispatcherTrait,
     };
+    use openzeppelin_token::erc20::interface::{IERC20DispatcherTrait, IERC20Dispatcher};
     use l2::core::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 
     use core::option::Option;
     use core::pedersen::PedersenTrait;
-    // use l2::utils::hash;
-
     use starknet::storage::{
         StoragePointerReadAccess, StoragePointerWriteAccess, Map, StorageMapReadAccess,
         StorageMapWriteAccess,
@@ -46,8 +47,7 @@ pub mod ZeroXBridgeL2 {
     use core::hash::{HashStateTrait, HashStateExTrait};
     use l2::core::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
 
-    const BASIS_POINTS: u256 = 10000;
-    const PRECISION: u256 = 1000000; // 6 decimals for rate precision
+    const PRECISION: u256 = 1_000_000_000_000_000_000; // 18 decimals for precision
 
     // Ownable Component
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -82,22 +82,24 @@ pub mod ZeroXBridgeL2 {
         proof_registry_address: ContractAddress,
         verified_commitments: Map<felt252, bool>,
         verified_roots: Map<felt252, felt252>,
+        burn_nonce: Map<ContractAddress, felt252>,
         rates: Rates,
     }
 
     #[derive(Drop, Hash)]
     pub struct BurnData {
         pub caller: felt252,
-        pub amount_low: felt252,
-        pub amount_high: felt252,
+        pub amount: u256,
+        pub nonce: felt252,
+        pub time_stamp: felt252,
     }
 
     #[derive(Drop, Hash)]
     pub struct MintData {
         pub recipient: felt252,
-        pub amount_low: felt252,
-        pub amount_high: felt252,
-        pub block_hash: felt252,
+        pub amount: felt252,
+        pub nonce: felt252,
+        pub time_stamp: felt252,
     }
 
     #[event]
@@ -145,16 +147,16 @@ pub mod ZeroXBridgeL2 {
     #[derive(Drop, Debug, starknet::Event)]
     pub struct BurnEvent {
         pub user: ContractAddress,
-        pub amount_low: felt252,
-        pub amount_high: felt252,
+        pub amount: u256,
+        pub nonce: felt252,
         pub commitment_hash: felt252,
     }
 
     #[derive(Drop, Debug, starknet::Event)]
     pub struct MintEvent {
         pub recipient: ContractAddress,
-        pub amount_low: felt252,
-        pub amount_high: felt252,
+        pub amount: u256,
+        pub nonce: felt252,
         pub commitment_hash: felt252,
     }
 
@@ -188,18 +190,14 @@ pub mod ZeroXBridgeL2 {
             assert(proof.len() >= 4, 'Proof too short');
 
             let recipient_felt = *proof.at(0);
-            let amount_low = *proof.at(1);
-            let amount_high = *proof.at(2);
-            let block_hash = *proof.at(3);
+            let amount = *proof.at(1);
+            let nonce = *proof.at(2);
+            let time_stamp = *proof.at(3);
 
-            let mint_data = MintData {
-                recipient: recipient_felt, amount_low, amount_high, block_hash,
-            };
+            let mint_data = MintData { recipient: recipient_felt, amount, nonce, time_stamp };
             let computed_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 
-            let usd_amount = core::integer::u256 {
-                low: amount_low.try_into().unwrap(), high: amount_high.try_into().unwrap(),
-            };
+            let usd_amount: u256 = amount.into();
 
             assert(computed_hash == commitment_hash, 'Proof does not match commitment');
 
@@ -214,9 +212,9 @@ pub mod ZeroXBridgeL2 {
 
             let recipient: ContractAddress = recipient_felt.try_into().unwrap();
 
-            let mint_rate = self.get_dynamic_rate(usd_amount);
+            let mint_rate = self.get_dynamic_rate();
 
-            let mint_amount = (usd_amount * mint_rate) / PRECISION / PRECISION;
+            let mint_amount = (usd_amount * mint_rate) / PRECISION;
 
             let token_addr = self.xzb_token.read();
             IMintableDispatcher { contract_address: token_addr }.mint(recipient, mint_amount);
@@ -224,32 +222,48 @@ pub mod ZeroXBridgeL2 {
             self
                 .emit(
                     Event::MintEvent(
-                        MintEvent { recipient, amount_low, amount_high, commitment_hash },
+                        MintEvent { recipient, amount: usd_amount, nonce, commitment_hash },
                     ),
                 );
         }
 
 
-        fn burn_xzb_for_unlock(ref self: ContractState, amount: core::integer::u256) {
+        fn burn_xzb_for_unlock(ref self: ContractState, amount: u256) {
             let caller = get_caller_address();
             let token_addr = self.xzb_token.read();
+            let protocol = get_contract_address();
 
+            let mint_rate = self.get_dynamic_rate();
+            let burn_amount_usd = (amount * PRECISION) / mint_rate;
+
+            assert(burn_amount_usd > 0, 'Burn amount less than zero');
+
+            // Transfer xZB tokens to the bridge
+            IERC20Dispatcher { contract_address: token_addr }
+                .transfer_from(caller, protocol, amount);
+
+            // Burn the xZB tokens
             IBurnableDispatcher { contract_address: token_addr }.burn(amount);
+
+            let current_nonce = self.burn_nonce.read(caller);
 
             let data_to_hash = BurnData {
                 caller: caller.try_into().unwrap(),
-                amount_low: amount.low.try_into().unwrap(),
-                amount_high: amount.high.try_into().unwrap(),
+                amount: burn_amount_usd,
+                nonce: current_nonce,
+                time_stamp: get_block_timestamp().into(),
             };
 
             let commitment_hash = PedersenTrait::new(0).update_with(data_to_hash).finalize();
+
+            self.burn_nonce.write(caller, current_nonce + 1);
 
             self
                 .emit(
                     BurnEvent {
                         user: caller,
-                        amount_low: amount.low.into(),
-                        amount_high: amount.high.into(),
+                        amount: burn_amount_usd,
+                        nonce: current_nonce,
                         commitment_hash: commitment_hash,
                     },
                 );
@@ -258,23 +272,20 @@ pub mod ZeroXBridgeL2 {
 
     #[abi(embed_v0)]
     impl DynamicRateImpl of super::IDynamicRate<ContractState> {
-        fn get_dynamic_rate(self: @ContractState, tvl: u256) -> u256 {
+        fn get_dynamic_rate(self: @ContractState) -> u256 {
             // Get current total TVL from oracle
             let oracle_dispatcher = IL2OracleDispatcher {
                 contract_address: self.oracle_address.read(),
             };
             let total_tvl = oracle_dispatcher.get_total_tvl();
 
-            // Calculate new TVL including the incoming deposit
-            let new_tvl = total_tvl + tvl; // WITH PRECISIONS
-            assert(new_tvl > 0, 'TVL cannot be zero');
+            assert(total_tvl > 0, 'TVL cannot be zero');
 
             // Get current xZB supply
             let xzb_supply = self.get_current_xzb_supply();
 
             // Calculate new protocol rate
-            // new_rate = (current_xZB_supply / new_TLV) * PRECISION
-            let raw_rate = (xzb_supply * PRECISION * PRECISION) / new_tvl;
+            let raw_rate = (xzb_supply * PRECISION) / total_tvl;
 
             let rates = self.rates.read();
 

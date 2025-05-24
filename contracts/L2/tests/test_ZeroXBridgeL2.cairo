@@ -12,17 +12,18 @@ use l2::core::xZBERC20::{
     IMintableDispatcher, IMintableDispatcherTrait, IManagerDispatcher, IManagerDispatcherTrait,
 };
 use l2::core::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
+use l2::core::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTrait};
 use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use starknet::{ContractAddress, contract_address_const};
+use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 use core::integer::u256;
 use core::pedersen::PedersenTrait;
 use core::hash::{HashStateTrait, HashStateExTrait};
 use openzeppelin_utils::serde::SerializedAppend;
 
-const MIN_RATE: u256 = 100000; // 0.1 (with PRECISION = 1000000)
-const MAX_RATE: u256 = 5000000; // 5.0 (with PRECISION = 1000000)
-const PRECISION: u256 = 1000000; // 6 decimals for rate precision
+const MIN_RATE: u256 = 100_000_000_000_000_000; // 0.1 (with PRECISION)
+const MAX_RATE: u256 = 5_000_000_000_000_000_000; // 5.0 (with PRECISION)
+const PRECISION: u256 = 1_000_000_000_000_000_000; // 18 decimals for precision
 
 fn alice() -> ContractAddress {
     contract_address_const::<'alice'>()
@@ -34,7 +35,7 @@ fn owner() -> ContractAddress {
 }
 
 
-fn block_hash() -> felt252 {
+fn time_stamp() -> felt252 {
     00000000000000000000011111111111111111111122222222222222222222222222222222
 }
 
@@ -46,7 +47,9 @@ fn non_owner() -> ContractAddress {
     contract_address_const::<'non_owner'>()
 }
 
-// 1,000,000,000,000,000
+fn nonce() -> felt252 {
+    0
+}
 
 fn deploy_xzb() -> ContractAddress {
     let contract_class = declare("xZBERC20").unwrap().contract_class();
@@ -101,25 +104,47 @@ fn test_burn_xzb_for_unlock_happy_path() {
     let alice_addr = alice();
     let owner_addr = owner();
 
+    let burn_amount = 20_000_u256 * PRECISION;
+
+    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IMintableDispatcher { contract_address: token_addr }.mint(owner_addr, 80_000_u256 * PRECISION);
+
     // Mint tokens to Alice.
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(2));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 20000);
+    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount);
 
     let balance = IERC20Dispatcher { contract_address: token_addr }.balance_of(alice_addr);
-    assert!(balance == 20000, "Bridge balance not updated");
+    assert!(balance == burn_amount, "Bridge balance not updated");
+
+    // Set total TVL in the oracle as 100,000 USD.
+    cheat_caller_address(oracle_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(100_000_u256 * PRECISION);
+
+    // Get the dynamic rate from the bridge
+    let rate = IDynamicRateDispatcher { contract_address: bridge_addr }.get_dynamic_rate();
+
+    // rate should be 1 usd per xZB token since TVL is 100,000 USD
+    assert!(rate == 1 * PRECISION, "Dynamic rate not set correctly");
+
+    // approve the bridget to spend Alice's tokens.
+    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: token_addr }.approve(bridge_addr, burn_amount);
 
     // Burn tokens through bridge with alice as caller.
     let mut spy = spy_events();
-    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
-    let amount = 10000_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+
+    let burn_amount_usd = (burn_amount * PRECISION) / rate;
+
     // Compute expected commitment hash.
     let data_to_hash = BurnData {
         caller: alice_addr.try_into().unwrap(),
-        amount_low: amount.low.try_into().unwrap(),
-        amount_high: amount.high.try_into().unwrap(),
+        amount: burn_amount_usd,
+        nonce: 0,
+        time_stamp: get_block_timestamp().into(),
     };
+
     let expected_hash = PedersenTrait::new(0).update_with(data_to_hash).finalize();
 
     // Build expected event value.
@@ -127,10 +152,7 @@ fn test_burn_xzb_for_unlock_happy_path() {
         bridge_addr,
         Event::BurnEvent(
             BurnEvent {
-                user: alice_addr,
-                amount_low: amount.low.into(),
-                amount_high: amount.high.into(),
-                commitment_hash: expected_hash,
+                user: alice_addr, amount: burn_amount_usd, nonce: 0, commitment_hash: expected_hash,
             },
         ),
     );
@@ -139,9 +161,9 @@ fn test_burn_xzb_for_unlock_happy_path() {
     spy.assert_emitted(@array![expected_event]);
 }
 
+
 #[test]
 fn test_burn_xzb_updates_balance() {
-    // Verify that burning xZB tokens updates the user's balance correctly.
     let token_addr = deploy_xzb();
     let proof_registry_addr = deploy_registry();
     let oracle_addr = deploy_oracle();
@@ -150,23 +172,41 @@ fn test_burn_xzb_updates_balance() {
     let alice_addr = alice();
     let owner_addr = owner();
 
-    // Mint tokens to Alice.
-    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 1000);
+    let burn_amount = 20_000_u256 * PRECISION;
 
-    // Check initial balance.
     let erc20 = IERC20Dispatcher { contract_address: token_addr };
-    let initial_balance = erc20.balance_of(alice_addr);
 
-    // Burn tokens through bridge.
-    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IMintableDispatcher { contract_address: token_addr }.mint(owner_addr, 80_000_u256 * PRECISION);
+
+    // Mint tokens to Alice.
+    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(2));
+    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount);
+
+    let initial_balance = erc20.balance_of(alice_addr);
+    assert!(initial_balance == burn_amount, "Bridge balance not updated");
+
+    // Set total TVL in the oracle as 100,000 USD.
+    cheat_caller_address(oracle_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(100_000_u256 * PRECISION);
+
+    // Get the dynamic rate from the bridge
+    let rate = IDynamicRateDispatcher { contract_address: bridge_addr }.get_dynamic_rate();
+
+    // rate should be 1 usd per xZB token since TVL is 100,000 USD
+    assert!(rate == 1 * PRECISION, "Dynamic rate not set correctly");
+
+    // approve the bridget to spend Alice's tokens.
     cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
-    let amount = 500_u256;
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(amount);
+    erc20.approve(bridge_addr, burn_amount);
+
+    // Burn tokens through bridge with alice as caller
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
 
     // Check balance after burn.
     let final_balance = erc20.balance_of(alice_addr);
-    assert(initial_balance - final_balance == 500, 'Token balance not reduced');
+    assert(initial_balance - final_balance == burn_amount, 'Token balance not reduced');
 }
 
 #[test]
@@ -183,16 +223,22 @@ fn test_burn_xzb_insufficient_balance() {
 
     // Mint fewer tokens than we attempt to burn.
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 300);
+    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 300_u256 * PRECISION);
+
+    // Set total TVL in the oracle as 100,000 USD.
+    cheat_caller_address(oracle_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(300_u256 * PRECISION);
+
+    let burn_amount = 500_u256 * PRECISION; // Attempt to burn 500 tokens
+
+    // approve the bridget to spend Alice's tokens.
+    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: token_addr }.approve(bridge_addr, burn_amount);
 
     // Attempt to burn 500 tokens when balance is only 300.
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
-    let amount: u256 = u256 { low: 500, high: 0 };
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
 }
-
-
 #[test]
 fn test_process_mint_proof_happy_path() {
     // Setup environment
@@ -207,19 +253,25 @@ fn test_process_mint_proof_happy_path() {
     // Create test data
     let amount: u256 = 10000_u256 * PRECISION; // 10,000 USD
 
-    // Create mock proof array (recipient, amount_low, amount_high, block_hash)
-    let mut proof = array![];
+    // Set total TVL in the oracle as 10,000 USD.
+    cheat_caller_address(oracle_addr, owner, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(amount);
+
+    // Create mock proof array (recipient, amount, nonce, block_hash)
+    let amount_felt: felt252 = amount.try_into().unwrap();
+
+    let mut proof: Array<felt252> = array![];
     proof.append(recipient_addr.into());
-    proof.append(amount.low.into());
-    proof.append(amount.high.into());
-    proof.append(block_hash());
+    proof.append(amount_felt);
+    proof.append(nonce());
+    proof.append(time_stamp());
 
     // Create commitment hash from mint data
     let mint_data = MintData {
         recipient: recipient_addr.into(),
-        amount_low: amount.low.into(),
-        amount_high: amount.high.into(),
-        block_hash: block_hash(),
+        amount: amount_felt,
+        nonce: nonce(),
+        time_stamp: time_stamp(),
     };
     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 
@@ -247,12 +299,7 @@ fn test_process_mint_proof_happy_path() {
     let expected_event = (
         bridge_addr,
         Event::MintEvent(
-            MintEvent {
-                recipient: recipient_addr,
-                amount_low: amount.low.into(),
-                amount_high: amount.high.into(),
-                commitment_hash,
-            },
+            MintEvent { recipient: recipient_addr, amount, nonce: nonce(), commitment_hash },
         ),
     );
     // Assert event was emitted
@@ -262,13 +309,13 @@ fn test_process_mint_proof_happy_path() {
     let erc20 = IERC20Dispatcher { contract_address: token_addr };
     let balance = erc20.balance_of(recipient_addr);
 
-    let mint_rate = IDynamicRateDispatcher { contract_address: bridge_addr }
-        .get_dynamic_rate(amount);
+    let mint_rate = IDynamicRateDispatcher { contract_address: bridge_addr }.get_dynamic_rate();
 
-    let mint_amount = (amount * mint_rate) / PRECISION / PRECISION;
+    let mint_amount = (amount * mint_rate) / PRECISION;
 
     assert(balance == mint_amount, 'Tokens not minted correctly');
 }
+
 #[test]
 #[should_panic(expected: 'Commitment already processed')]
 fn test_duplicate_commitment_rejection() {
@@ -284,19 +331,25 @@ fn test_duplicate_commitment_rejection() {
     // Create test data
     let amount: u256 = 10000_u256 * PRECISION; // 10,000 USD
 
-    // Create mock proof array (recipient, amount_low, amount_high, block_hash)
-    let mut proof = array![];
+    // Set total TVL in the oracle as 10,000 USD.
+    cheat_caller_address(oracle_addr, owner, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(amount);
+
+    // Create mock proof array (recipient, amount, nonce, block_hash)
+    let amount_felt: felt252 = amount.try_into().unwrap();
+
+    let mut proof: Array<felt252> = array![];
     proof.append(recipient_addr.into());
-    proof.append(amount.low.into());
-    proof.append(amount.high.into());
-    proof.append(block_hash());
+    proof.append(amount_felt);
+    proof.append(nonce());
+    proof.append(time_stamp());
 
     // Create commitment hash from mint data
     let mint_data = MintData {
         recipient: recipient_addr.into(),
-        amount_low: amount.low.into(),
-        amount_high: amount.high.into(),
-        block_hash: block_hash(),
+        amount: amount_felt,
+        nonce: nonce(),
+        time_stamp: time_stamp(),
     };
     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 
@@ -335,12 +388,15 @@ fn test_insufficient_proof_data() {
     // Create test data
     let amount: u256 = 10000_u256 * PRECISION; // 10,000 USD
 
+    // Create mock proof array (recipient, amount, nonce, block_hash)
+    let amount_felt: felt252 = amount.try_into().unwrap();
+
     // Create commitment hash from mint data
     let mint_data = MintData {
         recipient: recipient_addr.into(),
-        amount_low: amount.low.into(),
-        amount_high: amount.high.into(),
-        block_hash: block_hash(),
+        amount: amount_felt,
+        nonce: nonce(),
+        time_stamp: time_stamp(),
     };
     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 

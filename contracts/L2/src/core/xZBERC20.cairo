@@ -24,7 +24,7 @@ pub trait IManager<TContractState> {
     fn get_bridge_address(self: @TContractState) -> ContractAddress;
 }
 
-pub const MINTER_ROLE: felt252 = selector!("MINTER_ROLE");
+pub const BRIDGE_ROLE: felt252 = selector!("BRIDGE_ROLE");
 pub const UPGRADER_ROLE: felt252 = selector!("UPGRADER_ROLE");
 
 #[starknet::contract]
@@ -39,7 +39,7 @@ pub mod xZBERC20 {
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 
     use super::{IBurnable, IMintable, IManager};
-    use super::{MINTER_ROLE, UPGRADER_ROLE};
+    use super::{BRIDGE_ROLE, UPGRADER_ROLE};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -92,13 +92,13 @@ pub mod xZBERC20 {
 
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, owner);
         self.accesscontrol._grant_role(UPGRADER_ROLE, owner);
-        self.accesscontrol._grant_role(MINTER_ROLE, owner);
+        self.accesscontrol._grant_role(BRIDGE_ROLE, owner);
     }
 
     #[abi(embed_v0)]
     impl MintableImpl of IMintable<ContractState> {
         fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256) {
-            self.accesscontrol.assert_only_role(MINTER_ROLE);
+            self.accesscontrol.assert_only_role(BRIDGE_ROLE);
             self.erc20.mint(recipient, amount);
         }
     }
@@ -115,7 +115,7 @@ pub mod xZBERC20 {
     #[abi(embed_v0)]
     impl ManagerImpl of IManager<ContractState> {
         fn set_bridge_address(ref self: ContractState, bridge: ContractAddress) {
-            self.accesscontrol.grant_role(MINTER_ROLE, bridge);
+            self.accesscontrol.grant_role(BRIDGE_ROLE, bridge);
             self.bridge.write(bridge);
         }
 
