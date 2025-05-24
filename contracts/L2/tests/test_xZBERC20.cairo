@@ -1,6 +1,6 @@
 use l2::core::xZBERC20::{
     IBurnableDispatcher, IBurnableDispatcherTrait, IMintableDispatcher, IMintableDispatcherTrait,
-    MINTER_ROLE,
+    BRIDGE_ROLE,
 };
 
 use openzeppelin_access::accesscontrol::interface::{
@@ -43,7 +43,7 @@ fn mint(contract_address: ContractAddress, recipient: ContractAddress, amount: u
 
 fn grant_mint_role(contract_address: ContractAddress, user: ContractAddress) {
     cheat_caller_address(contract_address, owner(), CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.grant_role(MINTER_ROLE, user);
+    IAccessControlDispatcher { contract_address }.grant_role(BRIDGE_ROLE, user);
 }
 
 fn deploy_erc20() -> ContractAddress {
@@ -64,7 +64,7 @@ fn test_an_user_cant_grant_another_user() {
     let bob = bob();
     let contract_address = deploy_erc20();
     cheat_caller_address(contract_address, alice, CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.grant_role(MINTER_ROLE, bob);
+    IAccessControlDispatcher { contract_address }.grant_role(BRIDGE_ROLE, bob);
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn test_a_granted_user_cant_grant_another_user() {
     let alice = alice();
     let contract_address = deploy_erc20();
     cheat_caller_address(contract_address, minter, CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.grant_role(MINTER_ROLE, alice);
+    IAccessControlDispatcher { contract_address }.grant_role(BRIDGE_ROLE, alice);
 }
 
 #[test]
@@ -86,10 +86,10 @@ fn test_a_granted_user_cant_revoke_another_granted_user() {
     let contract_address = deploy_erc20();
 
     cheat_caller_address(contract_address, owner, CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.grant_role(MINTER_ROLE, alice);
+    IAccessControlDispatcher { contract_address }.grant_role(BRIDGE_ROLE, alice);
 
     cheat_caller_address(contract_address, minter, CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.revoke_role(MINTER_ROLE, alice);
+    IAccessControlDispatcher { contract_address }.revoke_role(BRIDGE_ROLE, alice);
 }
 
 #[test]
@@ -97,8 +97,8 @@ fn test_a_granted_user_can_renounce_role() {
     let minter = minter();
     let contract_address = deploy_erc20();
     cheat_caller_address(contract_address, minter, CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.renounce_role(MINTER_ROLE, minter);
-    let can_mint = IAccessControlDispatcher { contract_address }.has_role(MINTER_ROLE, minter);
+    IAccessControlDispatcher { contract_address }.renounce_role(BRIDGE_ROLE, minter);
+    let can_mint = IAccessControlDispatcher { contract_address }.has_role(BRIDGE_ROLE, minter);
     assert(!can_mint, 'User should not have the role');
 }
 
@@ -155,7 +155,7 @@ fn test_a_granted_user_can_mint() {
     let erc20 = IERC20Dispatcher { contract_address };
 
     cheat_caller_address(contract_address, owner, CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.grant_role(MINTER_ROLE, bob);
+    IAccessControlDispatcher { contract_address }.grant_role(BRIDGE_ROLE, bob);
 
     let previous_balance = erc20.balance_of(alice);
     cheat_caller_address(contract_address, bob, CheatSpan::TargetCalls(1));
@@ -174,7 +174,7 @@ fn test_a_revoked_user_can_not_mint() {
     let contract_address = deploy_erc20();
 
     cheat_caller_address(contract_address, owner, CheatSpan::TargetCalls(1));
-    IAccessControlDispatcher { contract_address }.revoke_role(MINTER_ROLE, minter);
+    IAccessControlDispatcher { contract_address }.revoke_role(BRIDGE_ROLE, minter);
 
     cheat_caller_address(contract_address, minter, CheatSpan::TargetCalls(1));
     IMintableDispatcher { contract_address }.mint(alice, amount);
