@@ -7,6 +7,7 @@ interface ISharpFactRegistry {
 
 interface IProofRegistry {
     function getVerifiedMerkleRoot(uint256 withdrawalCommitmentHash) external view returns (uint256);
+    function checkProof(uint256 withdrawalCommitmentHash, uint256 merkleRoot) external view returns (bool);
     function registerWithdrawalProof(uint256 withdrawalCommitmentHash, uint256 merkleRoot) external;
 }
 
@@ -72,9 +73,14 @@ contract ProofRegistry is IProofRegistry {
         return verifiedWithdrawalRoots[withdrawalCommitmentHash].merkleRoot;
     }
 
-    function registerWithdrawalProof(uint256 withdrawalCommitmentHash, uint256 merkleRoot) public {
+    function checkProof(uint256 withdrawalCommitmentHash, uint256 merkleRoot) public view returns (bool) {
         bytes32 factHash = getCairo1FactHash(withdrawalCommitmentHash, merkleRoot);
         bool isValid = sharpFactRegistry.isValid(factHash);
+        return isValid;
+    }
+
+    function registerWithdrawalProof(uint256 withdrawalCommitmentHash, uint256 merkleRoot) public {
+        bool isValid = checkProof(withdrawalCommitmentHash, merkleRoot);
         require(isValid, "Withdrawal proof not verified");
 
         verifiedWithdrawalRoots[withdrawalCommitmentHash] =
