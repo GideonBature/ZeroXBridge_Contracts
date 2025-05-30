@@ -329,14 +329,11 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
             (bool success,) = user.call{value: amount}("");
             require(success, "ETH transfer failed");
         } else if (tokenData.assetType == AssetType.ERC20) {
-            console.log("tokenReserves[address(dai)]", tvl);
-            console.log("tokenData.tokenAddress", tokenData.tokenAddress);
-            console.log("amount", amount);
             require(tokenData.tokenAddress != address(0), "ZeroXBridge: Invalid token address");
             require(tokenReserves[tokenData.tokenAddress] >= amount, "Insufficient token reserves");
+            
             // Decrement token reserves for ERC20
             tokenReserves[tokenData.tokenAddress] -= amount;
-            console.log("tokenReserves after unlockFundsWithProof", tokenReserves[tokenData.tokenAddress]);
             emit TokenReserveUpdated(tokenData.tokenAddress, tokenReserves[tokenData.tokenAddress]);
 
             // Perform ERC20 transfer
