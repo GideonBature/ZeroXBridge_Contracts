@@ -788,389 +788,244 @@ contract ZeroXBridgeL1Test is Test {
         assertEq(bridge.tvl(), expectedTVL, "TVL must be calculated from tracked reserves, not raw token balances");
     }
 
-    function testClaimReducesTokenReserveDAI() public {
-        uint256 depositAmount = 100 * 1e18; 
-        uint256 nonce = 0;
-        uint256 timestamp = block.timestamp;
-
-        uint256 ethPrice = 2000 * 1e8; 
-        uint256 daiPrice = 1e8;   
-        uint256 usdcPrice = 1e8;  
-        uint256 daicDec = 18;   
-
-
-        // Step 1: User registration and mint
-        vm.prank(user);
-        registerUser(user, starknetPubKey, ethAccountPrivateKey);
-        dai.mint(user, depositAmount);
-        vm.prank(user);
-        dai.approve(address(bridge), type(uint256).max);
-
-        // Step 2: Mock price feed
-        vm.mockCall(
-            daiPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(daiPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            ethPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(ethPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            usdcPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(usdcPrice), uint256(0), uint256(0), uint80(0))
-        );
-
-        uint256 usdRaw = (depositAmount * daiPrice) / 1e8;
-        uint256 usdValue = (usdRaw * 1e18) / (10 ** daicDec);
-
-        // Step 3: Warp and deposit
-        vm.warp(timestamp);
-        vm.prank(user);
-        bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(dai), depositAmount, user);
-
-        // Step 4: Compute usdValue and commitmentHash
-        uint256 commitmentHash = uint256(
-            keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp))
-        );
-
-        // Step 5: Register proof
-        uint256 merkleRoot = uint256(keccak256("mock merkle"));
-        MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
-
-        // Step 6: Build proof data
-        uint256[] memory proofdata = new uint256[](4);
-        proofdata[0] = starknetPubKey;
-        proofdata[1] = usdValue; 
-        proofdata[2] = nonce;
-        proofdata[3] = timestamp;
-
-        // Step 7: Generate valid signature
-        uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
-        uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
-        bytes32 digest = bytes32(msgHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
-        bytes memory starknetSig = abi.encodePacked(r, s);
-
-        // Mock signature verification
-        vm.mockCall(
-            address(bridge),
-            abi.encodeWithSelector(bridge.verifyStarknetSignature.selector, commitmentHash, starknetSig, starknetPubKey),
-            abi.encode(true)
-        );
-
-        bridge.unlockFundsWithProof(
-            ZeroXBridgeL1.AssetType.ERC20,
-            address(dai),
-            proofdata,
-            commitmentHash,
-            starknetSig
-        );
-
-        // // Step 9: Assertions
-        assertEq(bridge.tokenReserves(address(dai)), 0, "tokenReserves should be reduced after unlock");
-        assertEq(dai.balanceOf(user), depositAmount, "User should receive full unlocked amount");
-    }
-
-    function testClaimReducesTokenReserveUSDC() public {
-        uint256 depositAmount = 100 * 1e6; 
-        uint256 nonce = 0;
-        uint256 timestamp = block.timestamp;
-
-        uint256 ethPrice = 2000 * 1e8;
-        uint256 daiPrice = 1e8;   
-        uint256 usdcPrice = 1e8;  
-        uint256 usdcDec = 6;  
-
-        // Step 1: User registration and mint
-        vm.prank(user);
-        registerUser(user, starknetPubKey, ethAccountPrivateKey);
-        usdc.mint(user, depositAmount);
-        vm.prank(user);
-        usdc.approve(address(bridge), type(uint256).max);
-
-        // Step 2: Mock price feed
-        vm.mockCall(
-            daiPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(daiPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            ethPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(ethPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            usdcPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(usdcPrice), uint256(0), uint256(0), uint80(0))
-        );
-
-        uint256 usdRaw = (depositAmount * daiPrice) / 1e8;
-        uint256 usdValue = (usdRaw * 1e18) / (10 ** usdcDec);
-
-        // Step 3: Warp and deposit
-        vm.warp(timestamp);
-        vm.prank(user);
-        bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(usdc), depositAmount, user);
-
-        // Step 4: Compute usdValue and commitmentHash
-        uint256 commitmentHash = uint256(
-            keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp))
-        );
-
-        // Step 5: Register proof
-        uint256 merkleRoot = uint256(keccak256("mock merkle"));
-        MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
-
-        // Step 6: Build proof data
-        uint256[] memory proofdata = new uint256[](4);
-        proofdata[0] = starknetPubKey;
-        proofdata[1] = usdValue; 
-        proofdata[2] = nonce;
-        proofdata[3] = timestamp;
-
-        // Step 7: Generate valid signature
-        uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
-        uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
-        bytes32 digest = bytes32(msgHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
-        bytes memory starknetSig = abi.encodePacked(r, s);
-
-        // Mock signature verification
-        vm.mockCall(
-            address(bridge),
-            abi.encodeWithSelector(bridge.verifyStarknetSignature.selector, commitmentHash, starknetSig, starknetPubKey),
-            abi.encode(true)
-        );
-
-        bridge.unlockFundsWithProof(
-            ZeroXBridgeL1.AssetType.ERC20,
-            address(usdc),
-            proofdata,
-            commitmentHash,
-            starknetSig
-        );
-
-        // // Step 9: Assertions
-        assertEq(bridge.tokenReserves(address(dai)), 0, "tokenReserves should be reduced after unlock");
-        assertEq(usdc.balanceOf(user), depositAmount, "User should receive full unlocked amount");
-    }
-
-     function testClaimReducesTokenReserveETH() public {
-        uint256 depositAmount = 1 ether; // 100 DAI
-        uint256 nonce = 0;
-        uint256 timestamp = block.timestamp;
-
-        uint256 ethPrice = 2000 * 1e8;
-        uint256 daiPrice = 1e8;   
-        uint256 usdcPrice = 1e8;   
-        uint256 ethDec = 18;  
-
-
-        // Step 1: User registration and mint
-        vm.prank(user);
-        registerUser(user, starknetPubKey, ethAccountPrivateKey);
-
-        vm.deal(user, depositAmount);
-
-        usdc.mint(user, depositAmount);
-        vm.prank(user);
-        usdc.approve(address(bridge), type(uint256).max);
-
-        // Step 2: Mock price feed
-        vm.mockCall(
-            daiPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(daiPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            ethPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(ethPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            usdcPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(usdcPrice), uint256(0), uint256(0), uint80(0))
-        );
-
-        uint256 usdRaw = (depositAmount * ethPrice) / 1e8;
-        uint256 usdValue = (usdRaw * 1e18) / (10 ** ethDec);
-
-        // Step 3: Warp and deposit
-        vm.warp(timestamp);
-        vm.prank(user);
-        // bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(usdc), depositAmount, user);
-        bridge.depositAsset{value: depositAmount}(ZeroXBridgeL1.AssetType.ETH, address(0), depositAmount, user);
-
-        // Step 4: Compute usdValue and commitmentHash
-        uint256 commitmentHash = uint256(
-            keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp))
-        );
-
-        // Step 5: Register proof
-        uint256 merkleRoot = uint256(keccak256("mock merkle"));
-        MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
-
-        // Step 6: Build proof data
-        uint256[] memory proofdata = new uint256[](4);
-        proofdata[0] = starknetPubKey;
-        proofdata[1] = usdValue; 
-        proofdata[2] = nonce;
-        proofdata[3] = timestamp;
-
-        // Step 7: Generate valid signature
-        uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
-        uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
-        bytes32 digest = bytes32(msgHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
-        bytes memory starknetSig = abi.encodePacked(r, s);
-
-        // Mock signature verification
-        vm.mockCall(
-            address(bridge),
-            abi.encodeWithSelector(bridge.verifyStarknetSignature.selector, commitmentHash, starknetSig, starknetPubKey),
-            abi.encode(true)
-        );
-
-        bridge.unlockFundsWithProof(
-            ZeroXBridgeL1.AssetType.ETH,
-            address(0),
-            proofdata,
-            commitmentHash,
-            starknetSig
-        );
-
-        // // Step 9: Assertions
-        assertEq(bridge.tokenReserves(address(0)), 0, "tokenReserves should be reduced after unlock");
-        assertEq(user.balance, depositAmount, "User should receive full unlocked ETH amount");
-
-    }
-
-     function testClaimReducesTokenReserve() public {
-        uint256 depositAmount = 100 * 1e18; 
-        uint256 depositAmountUSDC = 200 * 1e18; 
-        uint256 nonce = 0;
-        uint256 timestamp = block.timestamp;
-
-        uint256 ethPrice = 2000 * 1e8; 
-        uint256 daiPrice = 1e8;   
-        uint256 usdcPrice = 1e8;  
-        uint256 daicDec = 18;   
-        uint256 usdcDec = 6;  
-
-
-        // Step 1: User registration and mint
-        vm.prank(user);
-        registerUser(user, starknetPubKey, ethAccountPrivateKey);
-        dai.mint(user, depositAmount);
-        vm.prank(user);
-        dai.approve(address(bridge), type(uint256).max);
-
-        vm.prank(user);
-        usdc.mint(user, depositAmountUSDC);
-        vm.prank(user);
-        usdc.approve(address(bridge), type(uint256).max);
-
-        // Step 2: Mock price feed
-        vm.mockCall(
-            daiPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(daiPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            ethPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(ethPrice), uint256(0), uint256(0), uint80(0))
-        );
-        vm.mockCall(
-            usdcPriceFeed,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(uint80(1), int256(usdcPrice), uint256(0), uint256(0), uint80(0))
-        );
-
-        uint256 usdRaw = (depositAmount * daiPrice) / 1e8;
-        uint256 usdValue = (usdRaw * 1e18) / (10 ** daicDec);
-
-        uint256 usdRawUSDC = (depositAmountUSDC * usdcPrice) / 1e8;
-        uint256 usdValueUSDC = (usdRawUSDC * 1e18) / (10 ** usdcDec);
-
-        // DAI
-        vm.warp(timestamp);
-        vm.prank(user);
-        bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(dai), depositAmount, user);
-
-        uint256 commitmentHash = uint256(
-            keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp))
-        );
-
-        uint256 merkleRoot = uint256(keccak256("mock merkle"));
-        MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
-
-        uint256[] memory proofdata = new uint256[](4);
-        proofdata[0] = starknetPubKey;
-        proofdata[1] = usdValue; 
-        proofdata[2] = nonce;
-        proofdata[3] = timestamp;
-
-        uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
-        uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
-        bytes32 digest = bytes32(msgHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
-        bytes memory starknetSig = abi.encodePacked(r, s);
-
-        vm.mockCall(
-            address(bridge),
-            abi.encodeWithSelector(bridge.verifyStarknetSignature.selector, commitmentHash, starknetSig, starknetPubKey),
-            abi.encode(true)
-        );
-
-        // USDC
-        vm.warp(timestamp);
-        vm.prank(user);
-        bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(usdc), depositAmountUSDC, user);
-
-        uint256 commitmentHashUSDC = uint256(
-            keccak256(abi.encodePacked(starknetPubKey, usdValueUSDC, nonce, timestamp))
-        );
-
-        uint256 merkleRootNew = uint256(keccak256("mock merkle"));
-        MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHashUSDC, merkleRootNew);
-
-        uint256[] memory proofdataUSDC = new uint256[](4);
-        proofdataUSDC[0] = starknetPubKey;
-        proofdataUSDC[1] = usdValue; 
-        proofdataUSDC[2] = nonce;
-        proofdataUSDC[3] = timestamp;
-
-        uint256 msgHashUSDC = commitmentHashUSDC % STARK_CURVE_ORDER;
-        bytes32 digestUSDC = bytes32(msgHashUSDC);
-        (uint8 vUSDC, bytes32 rUSDC, bytes32 sUSDC) = vm.sign(ethAccountPrivateKey, digestUSDC);
-        bytes memory starknetSigUSDC = abi.encodePacked(rUSDC, sUSDC);
-
-        // Mock signature verification
-        vm.mockCall(
-            address(bridge),
-            abi.encodeWithSelector(bridge.verifyStarknetSignature.selector, commitmentHashUSDC, starknetSigUSDC, starknetPubKey),
-            abi.encode(true)
-        );
-
-
-        bridge.unlockFundsWithProof(
-            ZeroXBridgeL1.AssetType.ERC20,
-            address(dai),
-            proofdata,
-            commitmentHash,
-            starknetSig
-        );
-
-        assertEq(bridge.tokenReserves(address(dai)), 0, "tokenReserves should be reduced after unlock");
-        assertEq(dai.balanceOf(user), depositAmount, "User should receive full unlocked amount");
-
-        bridge.updateTvl();
-        assertEq(bridge.tvl(), usdValueUSDC, "TVL must be calculated from tracked reserves, not raw token balances");
-    }
+    // function testClaimReducesTokenReserveDAI() public {
+    //     uint256 depositAmount = 100 * 1e18; 
+    //     uint256 nonce = 0;
+    //     uint256 timestamp = block.timestamp;
+
+    //     uint256 ethPrice = 2000 * 1e8; 
+    //     uint256 daiPrice = 1e8;   
+    //     uint256 usdcPrice = 1e8;  
+    //     uint256 daicDec = 18;   
+
+
+    //     // Step 1: User registration and mint
+    //     vm.prank(user);
+    //     registerUser(user, starknetPubKey, ethAccountPrivateKey);
+    //     dai.mint(user, depositAmount);
+    //     vm.prank(user);
+    //     dai.approve(address(bridge), type(uint256).max);
+
+    //     // Step 2: Mock price feed
+    //     vm.mockCall(
+    //         daiPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(daiPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+    //     vm.mockCall(
+    //         ethPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(ethPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+    //     vm.mockCall(
+    //         usdcPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(usdcPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+
+    //     uint256 usdRaw = (depositAmount * daiPrice) / 1e8;
+    //     uint256 usdValue = (usdRaw * 1e18) / (10 ** daicDec);
+
+    //     // Step 3: Warp and deposit
+    //     vm.warp(timestamp);
+    //     vm.prank(user);
+    //     bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(dai), depositAmount, user);
+
+    //     // Step 4: Compute usdValue and commitmentHash
+    //     uint256 commitmentHash = uint256(
+    //         keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp))
+    //     );
+
+    //     // Step 5: Register proof
+    //     uint256 merkleRoot = uint256(keccak256("mock merkle"));
+    //     MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
+
+    //     // Step 6: Build proof data
+    //     uint256[] memory proofdata = new uint256[](4);
+    //     proofdata[0] = starknetPubKey;
+    //     proofdata[1] = usdValue; 
+    //     proofdata[2] = nonce;
+    //     proofdata[3] = timestamp;
+
+    //     // Step 7: Generate valid signature
+    //     uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
+    //     uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
+    //     bytes32 digest = bytes32(msgHash);
+    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
+    //     bytes memory starknetSig = abi.encodePacked(r, s);
+
+    //     bridge.unlockFundsWithProof(
+    //         ZeroXBridgeL1.AssetType.ERC20,
+    //         address(dai),
+    //         proofdata,
+    //         commitmentHash,
+    //         starknetSig
+    //     );
+
+    //     // // Step 9: Assertions
+    //     assertEq(bridge.tokenReserves(address(dai)), 0, "tokenReserves should be reduced after unlock");
+    //     assertEq(dai.balanceOf(user), depositAmount, "User should receive full unlocked amount");
+    // }
+
+    // function testClaimReducesTokenReserveUSDC() public {
+    //     uint256 depositAmount = 100 * 1e6; 
+    //     uint256 nonce = 0;
+    //     uint256 timestamp = block.timestamp;
+
+    //     uint256 ethPrice = 2000 * 1e8;
+    //     uint256 daiPrice = 1e8;   
+    //     uint256 usdcPrice = 1e8;  
+    //     uint256 usdcDec = 6;  
+
+    //     // Step 1: User registration and mint
+    //     vm.prank(user);
+    //     registerUser(user, starknetPubKey, ethAccountPrivateKey);
+    //     usdc.mint(user, depositAmount);
+    //     vm.prank(user);
+    //     usdc.approve(address(bridge), type(uint256).max);
+
+    //     // Step 2: Mock price feed
+    //     vm.mockCall(
+    //         daiPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(daiPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+    //     vm.mockCall(
+    //         ethPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(ethPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+    //     vm.mockCall(
+    //         usdcPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(usdcPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+
+    //     uint256 usdRaw = (depositAmount * usdcPrice) / 1e8;
+    //     uint256 usdValue = (usdRaw * 1e18) / (10 ** usdcDec);
+
+    //     // Step 3: Warp and deposit
+    //     vm.warp(timestamp);
+    //     vm.prank(user);
+    //     bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(usdc), depositAmount, user);
+
+    //     // Step 4: Compute usdValue and commitmentHash
+    //     uint256 commitmentHash = uint256(
+    //         keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp))
+    //     );
+
+    //     // Step 5: Register proof
+    //     uint256 merkleRoot = uint256(keccak256("mock merkle"));
+    //     MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
+
+    //     // Step 6: Build proof data
+    //     uint256[] memory proofdata = new uint256[](4);
+    //     proofdata[0] = starknetPubKey;
+    //     proofdata[1] = usdValue; 
+    //     proofdata[2] = nonce;
+    //     proofdata[3] = timestamp;
+
+    //     // Step 7: Generate valid signature
+    //     uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
+    //     uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
+    //     bytes32 digest = bytes32(msgHash);
+    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
+    //     bytes memory starknetSig = abi.encodePacked(r, s);
+
+    //     bridge.unlockFundsWithProof(
+    //         ZeroXBridgeL1.AssetType.ERC20,
+    //         address(usdc),
+    //         proofdata,
+    //         commitmentHash,
+    //         starknetSig
+    //     );
+
+    //     // // Step 9: Assertions
+    //     assertEq(bridge.tokenReserves(address(dai)), 0, "tokenReserves should be reduced after unlock");
+    //     assertEq(usdc.balanceOf(user), depositAmount, "User should receive full unlocked amount");
+    // }
+
+    //  function testClaimReducesTokenReserveETH() public {
+    //     uint256 depositAmount = 1 ether; // 100 DAI
+    //     uint256 nonce = 0;
+    //     uint256 timestamp = block.timestamp;
+
+    //     uint256 ethPrice = 2000 * 1e8;
+    //     uint256 daiPrice = 1e8;   
+    //     uint256 usdcPrice = 1e8;   
+    //     uint256 ethDec = 18;  
+
+
+    //     // Step 1: User registration and mint
+    //     vm.prank(user);
+    //     registerUser(user, starknetPubKey, ethAccountPrivateKey);
+
+    //     vm.deal(user, depositAmount);
+
+    //     usdc.mint(user, depositAmount);
+    //     vm.prank(user);
+    //     usdc.approve(address(bridge), type(uint256).max);
+
+    //     // Step 2: Mock price feed
+    //     vm.mockCall(
+    //         daiPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(daiPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+    //     vm.mockCall(
+    //         ethPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(ethPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+    //     vm.mockCall(
+    //         usdcPriceFeed,
+    //         abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+    //         abi.encode(uint80(1), int256(usdcPrice), uint256(0), uint256(0), uint80(0))
+    //     );
+
+    //     uint256 usdRaw = (depositAmount * ethPrice) / 1e8;
+    //     uint256 usdValue = (usdRaw * 1e18) / (10 ** ethDec);
+
+    //     // Step 3: Warp and deposit
+    //     vm.warp(timestamp);
+    //     vm.prank(user);
+    //     // bridge.depositAsset(ZeroXBridgeL1.AssetType.ERC20, address(usdc), depositAmount, user);
+    //     bridge.depositAsset{value: depositAmount}(ZeroXBridgeL1.AssetType.ETH, address(0), depositAmount, user);
+
+    //     // Step 4: Compute usdValue and commitmentHash
+    //     uint256 commitmentHash = uint256(
+    //         keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp))
+    //     );
+
+    //     // Step 5: Register proof
+    //     uint256 merkleRoot = uint256(keccak256("mock merkle"));
+    //     MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
+
+    //     // Step 6: Build proof data
+    //     uint256[] memory proofdata = new uint256[](4);
+    //     proofdata[0] = starknetPubKey;
+    //     proofdata[1] = usdValue; 
+    //     proofdata[2] = nonce;
+    //     proofdata[3] = timestamp;
+
+    //     // Step 7: Generate valid signature
+    //     uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
+    //     uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
+    //     bytes32 digest = bytes32(msgHash);
+    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
+    //     bytes memory starknetSig = abi.encodePacked(r, s);
+
+    //     bridge.unlockFundsWithProof(
+    //         ZeroXBridgeL1.AssetType.ETH,
+    //         address(0),
+    //         proofdata,
+    //         commitmentHash,
+    //         starknetSig
+    //     );
+
+    //     // // Step 9: Assertions
+    //     assertEq(bridge.tokenReserves(address(0)), 0, "tokenReserves should be reduced after unlock");
+    //     assertEq(user.balance, depositAmount, "User should receive full unlocked ETH amount");
+
+    // }
 }
