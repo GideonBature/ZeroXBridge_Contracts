@@ -144,34 +144,6 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
     function fetchReserveTVL() public view returns (uint256) {
         uint256 totalValue = 0;
 
-        // for (uint256 i = 0; i < supportedTokens.length; i++) {
-        //     address tokenAddr = supportedTokens[i];
-
-        //     // Get the raw balance + decimals
-        //     uint256 balance;
-        //     uint8 dec;
-        //     if (tokenAddr == address(0)) {
-        //         // balance = address(this).balance; // ETH balance in wei
-        //         balance = address(this).balance; // ETH balance in wei
-        //         dec = tokenDecimals[tokenAddr]; // should be 18
-        //     } else {
-        //         // IERC20 token = IERC20(tokenAddr);
-        //         // balance = token.balanceOf(address(this));
-        //         balance = tokenReserves[tokenAddr];
-        //         dec = tokenDecimals[tokenAddr];
-        //     }
-
-        //     // Pull the USD price (8-decimals)
-        //     uint256 price = getTokenPriceUSD(tokenAddr);
-
-        //     //      value = balance * price / 1e8   --> this is USD value in token-units (18+8 decimals)
-        //     //      value = value / (10 ** dec)     --> normalize back to 18 decimals
-        //     uint256 usdRaw = (balance * price) / 1e8;
-        //     uint256 usdVal = (usdRaw * 1e18) / (10 ** dec);
-
-        //     totalValue += usdVal;
-        // }
-
         for (uint256 i = 0; i < supportedTokens.length; i++) {
                 address tokenAddr = supportedTokens[i];
 
@@ -246,6 +218,7 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
         // Pull the USD price (8-decimals)
         uint256 price = getTokenPriceUSD(tokenAddress);
         uint8 dec = tokenDecimals[tokenAddress];
+
         uint256 usdRaw = (amount * price) / 1e8;
         uint256 usdVal = (usdRaw * 1e18) / (10 ** dec);
 
@@ -314,8 +287,10 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
         TokenAssetData memory tokenData = getTokenData(assetType, tokenAddress);
 
         uint8 dec = tokenDecimals[tokenAddress];
+        uint256 price = getTokenPriceUSD(tokenAddress);
+        // uint256 amount = (usd_amount * (10 ** dec)) / price;
+        uint256 amount = (usd_amount * 10 ** dec) / (price * 10 ** 10); //TODO Check if Calculation is correct
 
-        uint256 amount = usd_amount * (10 ** dec) / getTokenPriceUSD(tokenAddress);
         // Check if token is whitelisted
         if (tokenData.assetType == AssetType.ETH) {
             require(tokenReserves[address(0)] >= amount, "Insufficient token reserves1");
