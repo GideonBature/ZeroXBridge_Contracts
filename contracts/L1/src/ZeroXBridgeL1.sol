@@ -265,7 +265,7 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
 
         require(commitmentHash == expectedCommitmentHash, "ZeroXBridge: Invalid commitment hash");
 
-        // require(verifyStarknetSignature(commitmentHash, starknetSig, starknetPubKey), "ZeroXBridge: Invalid signature");
+        require(verifyStarknetSignature(commitmentHash, starknetSig, starknetPubKey), "ZeroXBridge: Invalid signature");
 
         // Check proof registry for verified root
         uint256 verifiedRoot = proofRegistry.getVerifiedMerkleRoot(commitmentHash);

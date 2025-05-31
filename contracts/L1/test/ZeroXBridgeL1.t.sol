@@ -1046,7 +1046,8 @@ contract ZeroXBridgeL1Test is Test {
 
         // // Step 9: Assertions
         assertEq(bridge.tokenReserves(address(0)), 0, "tokenReserves should be reduced after unlock");
-        assertEq(usdc.balanceOf(user), depositAmount, "User should receive full unlocked amount");
+        assertEq(user.balance, depositAmount, "User should receive full unlocked ETH amount");
+
     }
 
      function testClaimReducesTokenReserve() public {
