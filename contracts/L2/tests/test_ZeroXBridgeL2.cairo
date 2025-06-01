@@ -292,8 +292,16 @@ fn test_process_mint_proof_happy_path() {
     // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
 
+    // Dummy values for eth_address, r, s, y_parity for test purposes
+    let eth_address = 0x767410c1bb448978bd42b984d7de5970bcaf5c43_u256
+    .try_into()
+    .unwrap();
+    let r: u256 = 0x4c8e4fbc1fbb1dece52185e532812c4f7a5f81cf3ee10044320a0d03b62d3e9a;
+    let s: u256 = 0x4ac5e5c0c0e8a4871583cc131f35fb49c2b7f60e6a8b84965830658f08f7410c;
+    let y_parity: bool = true;
+
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-        .mint_and_claim_xzb(proof, commitment_hash);
+        .mint_and_claim_xzb(proof, commitment_hash, eth_address, r, s, y_parity);
 
     // Build expected event
     let expected_event = (
@@ -360,11 +368,21 @@ fn test_duplicate_commitment_rejection() {
     // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
 
+    let eth_address= 0x767410c1bb448978bd42b984d7de5970bcaf5c43_u256
+    .try_into()
+    .unwrap();
+    let r: u256 = 0x4c8e4fbc1fbb1dece52185e532812c4f7a5f81cf3ee10044320a0d03b62d3e9a;
+    let s: u256 = 0x4ac5e5c0c0e8a4871583cc131f35fb49c2b7f60e6a8b84965830658f08f7410c;
+    let y_parity: bool = true;
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-        .mint_and_claim_xzb(proof.clone(), commitment_hash);
+        .mint_and_claim_xzb(proof.clone(), commitment_hash, eth_address, r, s, y_parity);
+    let eth_address: felt252 = 0;
+    let r: u256 = 0x1_u256;
+    let s: u256 = 0x1_u256;
+    let y_parity: bool = true;
 
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-        .mint_and_claim_xzb(proof, commitment_hash);
+        .mint_and_claim_xzb(proof, commitment_hash, eth_address, r, s, y_parity);
 }
 
 #[test]
@@ -402,7 +420,16 @@ fn test_insufficient_proof_data() {
 
     // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
+
+    // Dummy values for eth_address, r, s, y_parity for test purposes
+    let eth_address = 0x767410c1bb448978bd42b984d7de5970bcaf5c43_u256
+    .try_into()
+    .unwrap();
+    let r: u256 = 0x4c8e4fbc1fbb1dece52185e532812c4f7a5f81cf3ee10044320a0d03b62d3e9a;
+    let s: u256 = 0x4ac5e5c0c0e8a4871583cc131f35fb49c2b7f60e6a8b84965830658f08f7410c;
+    let y_parity: bool = true;
+
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
-        .mint_and_claim_xzb(proof, commitment_hash);
+        .mint_and_claim_xzb(proof, commitment_hash, eth_address, r, s, y_parity);
 }
 
