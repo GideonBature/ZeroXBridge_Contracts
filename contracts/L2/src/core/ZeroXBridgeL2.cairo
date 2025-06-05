@@ -198,11 +198,13 @@ pub mod ZeroXBridgeL2 {
             s: u256,
             y_parity: bool,
         ) {
+            // Check proof length first
+            assert(proof.len() >= 4, 'Proof too short');
+
+            // Check for duplicate commitment
             assert(
                 !self.verified_commitments.read(commitment_hash), 'Commitment already processed',
             );
-
-            assert(proof.len() >= 4, 'Proof too short');
 
             // Verify the signature over the commitment_hash
             let msg_hash: u256 = commitment_hash.into();
