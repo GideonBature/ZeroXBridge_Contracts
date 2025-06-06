@@ -267,7 +267,8 @@ contract MerkleStateManagerTest is Test {
         merkleManager.emergencyPause("Emergency");
         vm.stopPrank();
 
-        vm.expectRevert("Pausable: paused");
+        // OpenZeppelin's Pausable uses a custom error with a specific selector
+        vm.expectRevert(bytes4(0xd93c0665));
         merkleManager.updateDepositRootFromCommitment(USER_DEPOSIT_HASH);
     }
 
@@ -277,7 +278,8 @@ contract MerkleStateManagerTest is Test {
         vm.stopPrank();
 
         vm.startPrank(relayer1);
-        vm.expectRevert("Pausable: paused");
+        // OpenZeppelin's Pausable uses a custom error with a specific selector
+        vm.expectRevert(bytes4(0xd93c0665));
         merkleManager.syncWithdrawalRootFromL2(L2_ROOT_UPDATE);
         vm.stopPrank();
     }

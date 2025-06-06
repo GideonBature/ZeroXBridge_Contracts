@@ -82,13 +82,7 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
         withdrawalRootTimestamps[0] = block.timestamp;
     }
 
-    /**
-     * @dev Custom whenNotPaused modifier using string errors for test compatibility
-     */
-    modifier whenNotPausedString() {
-        require(!paused(), "Pausable: paused");
-        _;
-    }
+    // Using OpenZeppelin's built-in whenNotPaused modifier instead of custom implementation
 
     /**
      * @dev Modifier to check rate limiting
@@ -113,7 +107,7 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
      */
     function updateDepositRootFromCommitment(
         bytes32 commitment
-    ) external whenNotPausedString nonReentrant rateLimited {
+    ) external whenNotPaused nonReentrant rateLimited {
         require(commitment != bytes32(0), "MerkleStateManager: Invalid commitment");
         require(!processedCommitments[commitment], "MerkleStateManager: Commitment already processed");
         require(depositLeafCount < MAX_LEAF_COUNT, "MerkleStateManager: Tree capacity exceeded");
@@ -150,7 +144,7 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
      */
     function batchUpdateDepositRoots(
         bytes32[] calldata commitments
-    ) external whenNotPausedString nonReentrant rateLimited {
+    ) external whenNotPaused nonReentrant rateLimited {
         require(commitments.length > 0 && commitments.length <= 100, "MerkleStateManager: Invalid batch size");
         require(depositLeafCount + commitments.length <= MAX_LEAF_COUNT, "MerkleStateManager: Batch exceeds capacity");
         uint256 startLeafIndex = depositLeafCount;
@@ -194,7 +188,7 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
      */
     function syncWithdrawalRootFromL2(
         bytes32 newRoot
-    ) external whenNotPausedString nonReentrant onlyRelayer rateLimited {
+    ) external whenNotPaused nonReentrant onlyRelayer rateLimited {
         require(newRoot != bytes32(0), "MerkleStateManager: Invalid root");
         require(newRoot != withdrawalRoot, "MerkleStateManager: Root unchanged");
         withdrawalRoot = newRoot;
