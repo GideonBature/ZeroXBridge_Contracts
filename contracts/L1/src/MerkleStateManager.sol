@@ -11,13 +11,20 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  * @dev Manages deposit commitments and synced withdrawal roots for ZeroXBridge protocol
  * @notice Compatible with Alexandria Merkle Trees using deterministic leaf ordering and proper tree construction
  */
-contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
+contract MerkleStateManager is Ownable, Pausable, ReentrancyGuard {
+    // Debug events
+    event DebugProofVerification(uint256 leafIndex, bytes32 computedHash, bytes32 expectedRoot, bool isValid);
+
     using MerkleProof for bytes32[];
 
     bytes32 public depositRoot;
     bytes32 public withdrawalRoot;
     uint256 public depositRootIndex;
     uint256 public withdrawalRootIndex;
+    
+    // Storage for intermediate tree nodes to optimize proof generation
+    // Indexed by [level][position] for efficient retrieval
+    mapping(uint256 => mapping(uint256 => bytes32)) public treeNodes;
     uint256 public depositTreeDepth;
     uint256 public depositLeafCount;
 
@@ -116,7 +123,7 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
         uint256 leafIndex = depositLeafCount;
         commitmentToLeafIndex[commitment] = leafIndex;
         leaves.push(commitment);
-        bytes32 newRoot = _calculateNewDepositRoot(commitment, leafIndex);
+        bytes32 newRoot = _calculateNewDepositRoot(commitment);
         depositRoot = newRoot;
         depositRootIndex++;
         depositLeafCount++;
@@ -247,11 +254,11 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @dev Verifies a deposit proof against the current deposit root
+     * @dev Verifies a deposit proof
      * @param leaf The leaf to verify
-     * @param leafIndex The index of the leaf in the tree
+     * @param leafIndex The index of the leaf
      * @param proof The Merkle proof
-     * @return True if the proof is valid
+     * @return Whether the proof is valid
      */
     function verifyDepositProof(
         bytes32 leaf,
@@ -261,8 +268,37 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
         if (leafIndex >= depositLeafCount) {
             return false;
         }
-
-        return MerkleProof.verify(proof, depositRoot, leaf);
+        
+        bytes32 computedHash = leaf;
+        uint256 currentIndex = leafIndex;
+        uint256 currentLevelNodes = depositLeafCount;
+        
+        for (uint256 i = 0; i < proof.length; i++) {
+            // Check if this is the last node at this level and it's odd
+            bool isLastNodeInOddLevel = (currentIndex == currentLevelNodes - 1) && (currentLevelNodes % 2 == 1);
+            
+            if (isLastNodeInOddLevel) {
+                // For the last node in an odd level, it's duplicated
+                // The node is just passed up to the next level without hashing
+                // No need to use the proof element for this level
+            } else {
+                // Normal case - use the provided proof element
+                bytes32 proofElement = proof[i];
+                if (currentIndex % 2 == 0) {
+                    // Current node is a left child
+                    computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
+                } else {
+                    // Current node is a right child
+                    computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
+                }
+            }
+            
+            // Update for next level
+            currentIndex = currentIndex / 2;
+            currentLevelNodes = (currentLevelNodes + 1) / 2; // Calculate nodes at next level
+        }
+        
+        return computedHash == depositRoot;
     }
 
     /**
@@ -304,30 +340,30 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
 
     /**
      * @dev Calculates new deposit root using Alexandria tree construction
-     * @param commitment The new commitment to add
-     * @param leafIndex The index where the commitment will be placed
+     * @param newCommitment The new commitment to add
      * @return The new Merkle root
      */
-    function _calculateNewDepositRoot(
-        bytes32 commitment,
-        uint256 leafIndex
-    ) internal view returns (bytes32) {
-        if (leafIndex == 0) {
-            return commitment;
-        }
-        bytes32[] memory tempLeaves = new bytes32[](depositLeafCount + 1);
+    function _calculateNewDepositRoot(bytes32 newCommitment) internal returns (bytes32) {
+        uint256 newLeafCount = depositLeafCount + 1;
+        bytes32[] memory updatedLeaves = new bytes32[](newLeafCount);
+        
+        // Copy existing leaves
         for (uint256 i = 0; i < depositLeafCount; i++) {
-            tempLeaves[i] = leaves[i];
+            updatedLeaves[i] = leaves[i];
         }
-        tempLeaves[leafIndex] = commitment;
-        return _calculateMerkleRoot(tempLeaves);
+        
+        // Add new leaf
+        updatedLeaves[depositLeafCount] = newCommitment;
+        
+        // Calculate new root and store intermediate nodes
+        return _calculateMerkleRoot(updatedLeaves);
     }
 
     /**
      * @dev Recalculates the entire deposit root from current leaves
      * @return The calculated Merkle root
      */
-    function _recalculateDepositRoot() internal view returns (bytes32) {
+    function _recalculateDepositRoot() internal returns (bytes32) {
         return _calculateMerkleRoot(leaves);
     }
 
@@ -336,39 +372,53 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
      * @param leafArray The array of leaves
      * @return The calculated Merkle root
      */
-    function _calculateMerkleRoot(bytes32[] memory leafArray) internal pure returns (bytes32) {
-        if (leafArray.length == 0) {
-            return bytes32(0);
-        }
-        if (leafArray.length == 1) {
-            return leafArray[0];
-        }
-
+    function _calculateMerkleRoot(bytes32[] memory leafArray) internal returns (bytes32) {
         uint256 n = leafArray.length;
-
-        // Pad to next power of 2 for deterministic structure (Alexandria style)
-        uint256 paddedSize = _nextPowerOfTwo(n);
-        bytes32[] memory tree = new bytes32[](paddedSize);
-
+        if (n == 0) return bytes32(0);
+        if (n == 1) return leafArray[0];
+        
+        // Create a working array that we'll use to build the tree
+        uint256 maxSize = 2 * n; // Allocate enough space for all levels
+        bytes32[] memory nodes = new bytes32[](maxSize);
+        
+        // Copy leaves to the nodes array and store in treeNodes
         for (uint256 i = 0; i < n; i++) {
-            tree[i] = leafArray[i];
+            nodes[i] = leafArray[i];
+            treeNodes[0][i] = leafArray[i];
         }
-        for (uint256 i = n; i < paddedSize; i++) {
-            tree[i] = bytes32(0);
-        }
-
-        // Build tree bottom-up with deterministic ordering
-        uint256 currentSize = paddedSize;
-        while (currentSize > 1) {
-            for (uint256 i = 0; i < currentSize / 2; i++) {
-                bytes32 left = tree[2 * i];
-                bytes32 right = tree[2 * i + 1];
-                tree[i] = keccak256(abi.encodePacked(left, right));
+        
+        // Start building the tree level by level
+        uint256 levelSize = n;
+        uint256 level = 0;
+        
+        while (levelSize > 1) {
+            uint256 nextLevelSize = (levelSize + 1) / 2; // Ceiling division for odd numbers
+            
+            // Process pairs of nodes
+            for (uint256 i = 0; i < levelSize / 2; i++) {
+                bytes32 left = nodes[i * 2];
+                bytes32 right = nodes[i * 2 + 1];
+                nodes[n + i] = keccak256(abi.encodePacked(left, right));
+                treeNodes[level + 1][i] = nodes[n + i]; // Store intermediate nodes
             }
-            currentSize = currentSize / 2;
+            
+            // Handle odd node at the end if present
+            if (levelSize % 2 == 1) {
+                // Duplicate the last node
+                nodes[n + levelSize / 2] = nodes[levelSize - 1];
+                treeNodes[level + 1][levelSize / 2] = nodes[levelSize - 1];
+            }
+            
+            // Copy the next level back to the beginning of our working array
+            for (uint256 i = 0; i < nextLevelSize; i++) {
+                nodes[i] = nodes[n + i];
+            }
+            
+            levelSize = nextLevelSize;
+            level++;
         }
-
-        return tree[0];
+        
+        return nodes[0]; // Root is at index 0 after the final iteration
     }
 
     /**
@@ -392,20 +442,49 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
         if (depositLeafCount <= 1) {
             return new bytes32[](0);
         }
-
-        uint256 treeSize = _nextPowerOfTwo(depositLeafCount);
-        uint256 depth = _log2(treeSize);
-        bytes32[] memory proof = new bytes32[](depth);
+        
+        uint256 treeDepth = _getTreeDepth(depositLeafCount);
+        bytes32[] memory proof = new bytes32[](treeDepth);
         uint256 currentIndex = leafIndex;
-        for (uint256 i = 0; i < depth; i++) {
-            uint256 siblingIndex = currentIndex ^ 1;
-            if (siblingIndex < depositLeafCount) {
-                proof[i] = leaves[siblingIndex];
+        uint256 currentLevelNodes = depositLeafCount;
+        
+        for (uint256 level = 0; level < treeDepth; level++) {
+            // Check if this is the last node at an odd-numbered level
+            bool isLastNodeInOddLevel = (currentIndex == currentLevelNodes - 1) && (currentLevelNodes % 2 == 1);
+            
+            if (isLastNodeInOddLevel) {
+                // For the last node in an odd level, we should use the node itself as the proof element
+                // This is because when verifying, we'll pair the node with itself
+                bytes32 nodeValue;
+                if (level == 0) {
+                    // At level 0, use the leaf directly
+                    nodeValue = leaves[currentIndex];
+                } else if (treeNodes[level][currentIndex] != bytes32(0)) {
+                    nodeValue = treeNodes[level][currentIndex];
+                } else {
+                    nodeValue = _calculateNodeHash(level, currentIndex);
+                }
+                proof[level] = nodeValue;
             } else {
-                proof[i] = bytes32(0);
+                // Normal case: get the sibling node
+                uint256 siblingIndex = currentIndex ^ 1; // XOR with 1 to get sibling index
+                bytes32 siblingNode;
+                if (level == 0) {
+                    // At level 0, use the leaf directly
+                    siblingNode = leaves[siblingIndex];
+                } else if (treeNodes[level][siblingIndex] != bytes32(0)) {
+                    siblingNode = treeNodes[level][siblingIndex];
+                } else {
+                    siblingNode = _calculateNodeHash(level, siblingIndex);
+                }
+                proof[level] = siblingNode;
             }
+            
+            // Move to parent index for next level
             currentIndex = currentIndex / 2;
+            currentLevelNodes = (currentLevelNodes + 1) / 2; // Calculate nodes at next level
         }
+        
         return proof;
     }
 
@@ -419,6 +498,81 @@ contract MerkleStateManager is Ownable, ReentrancyGuard, Pausable {
             result++;
         }
         return result;
+    }
+    
+    /**
+     * @dev Calculate the tree depth based on the number of leaves
+     */
+    function _getTreeDepth(uint256 leafCount) internal pure returns (uint256) {
+        if (leafCount <= 1) return 0;
+        return _log2(_nextPowerOfTwo(leafCount));
+    }
+    
+    /**
+     * @dev Calculate a node hash recursively if not stored
+     * @param level The tree level of the node
+     * @param index The index of the node at that level
+     * @return The hash of the node
+     */
+    function _calculateNodeHash(uint256 level, uint256 index) internal view returns (bytes32) {
+        // If we're at leaf level (level 0), return the leaf or zero if out of bounds
+        if (level == 0) {
+            if (index < depositLeafCount) {
+                return leaves[index];
+            } else {
+                return bytes32(0);
+            }
+        }
+        
+        // Calculate the number of nodes at the child level
+        uint256 childLevel = level - 1;
+        uint256 nodesAtChildLevel;
+        
+        if (childLevel == 0) {
+            // At leaf level, it's the number of leaves
+            nodesAtChildLevel = depositLeafCount;
+        } else {
+            // For higher levels, calculate based on the number of nodes at the level below
+            uint256 leavesNeeded = depositLeafCount;
+            for (uint256 i = 0; i < childLevel; i++) {
+                leavesNeeded = (leavesNeeded + 1) / 2;
+            }
+            nodesAtChildLevel = leavesNeeded;
+        }
+        
+        // Calculate child indices
+        uint256 leftChildIndex = index * 2;
+        uint256 rightChildIndex = leftChildIndex + 1;
+        
+        // Get left child (from storage or calculate)
+        bytes32 leftChild;
+        if (leftChildIndex < nodesAtChildLevel) {
+            if (treeNodes[childLevel][leftChildIndex] != bytes32(0)) {
+                leftChild = treeNodes[childLevel][leftChildIndex];
+            } else {
+                leftChild = _calculateNodeHash(childLevel, leftChildIndex);
+            }
+        } else {
+            return bytes32(0); // Out of bounds
+        }
+        
+        // Handle odd number of nodes at child level
+        if (rightChildIndex >= nodesAtChildLevel) {
+            // If this is the last node at this level and there are odd nodes below,
+            // duplicate the left child
+            return leftChild;
+        }
+        
+        // Get right child (from storage or calculate)
+        bytes32 rightChild;
+        if (treeNodes[childLevel][rightChildIndex] != bytes32(0)) {
+            rightChild = treeNodes[childLevel][rightChildIndex];
+        } else {
+            rightChild = _calculateNodeHash(childLevel, rightChildIndex);
+        }
+        
+        // Hash the children together to get the parent
+        return keccak256(abi.encodePacked(leftChild, rightChild));
     }
 
     /**
