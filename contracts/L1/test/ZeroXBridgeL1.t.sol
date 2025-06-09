@@ -11,7 +11,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {console} from "forge-std/console.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 // // Test contract for bridge
 contract ZeroXBridgeL1Test is Test {
@@ -946,7 +945,7 @@ contract ZeroXBridgeL1Test is Test {
     //     );
 
     //     // // Step 9: Assertions
-    //     assertEq(bridge.tokenReserves(address(dai)), 0, "tokenReserves should be reduced after unlock");
+    //     assertEq(bridge.tokenReserves(address(usdc)), 0, "tokenReserves should be reduced after unlock");
     //     assertEq(usdc.balanceOf(user), depositAmount, "User should receive full unlocked amount");
     // }
 
