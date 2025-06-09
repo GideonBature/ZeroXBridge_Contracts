@@ -275,7 +275,7 @@ fn test_process_mint_proof_happy_path() {
     };
     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 
-    // Print the commitment hash for use in JS
+    // Print the commitment hash for use in JS signature generation
     println!("commitment_hash: {:x}", commitment_hash);
 
     // Create spy to track events
@@ -295,11 +295,11 @@ fn test_process_mint_proof_happy_path() {
     // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
 
-    // Dummy values for eth_address, r, s, y_parity for test purposes
-    let eth_address = 0xe80ef3b97e17BC5Ea1c1b79791B955342c68B47e.try_into().unwrap();
-    let r: u256 = 0x3e2db63f85f6dcd44aaee9c340361553feda42a98b4415653a5d6a966f8ead4b;
-    let s: u256 = 0x6e7edbe04d55d51ea77a0cab20995f2fc259726954a9ac93d57009be98d49001;
-    let y_parity: bool = false;
+    // Use valid signature values generated for the commitment hash
+    let eth_address = 0x30a12890B3c5535f714a33d89943eDf007dbb845.try_into().unwrap();
+    let r: u256 = 0x4ac6858340139bb74d09091f14a5cb67ab6a63b2bc3e217d931322af84a04a7a;
+    let s: u256 = 0x73ded3366f388b39c5f28db1df7c128264d1e8fce3e66053b2e9b1adedda4753;
+    let y_parity: bool = true;
     let commitment_hash = 0x12315b7aa9abd71d79ebe6926844e4612925f04edcd18eb9c687d517f8a674;
 
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
@@ -381,7 +381,10 @@ fn test_duplicate_commitment_rejection() {
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
 
     // Use the same valid signature for both calls
-    let (eth_address, r, s, y_parity) = mock_valid_signature(commitment_hash);
+    let eth_address = 0x30a12890B3c5535f714a33d89943eDf007dbb845.try_into().unwrap();
+    let r: u256 = 0x4ac6858340139bb74d09091f14a5cb67ab6a63b2bc3e217d931322af84a04a7a;
+    let s: u256 = 0x73ded3366f388b39c5f28db1df7c128264d1e8fce3e66053b2e9b1adedda4753;
+    let y_parity: bool = true;
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
         .mint_and_claim_xzb(proof.clone(), commitment_hash, eth_address, r, s, y_parity);
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }

@@ -198,21 +198,20 @@ pub mod ZeroXBridgeL2 {
             s: u256,
             y_parity: bool,
         ) {
-            // Check proof length first
+            // Always check proof length first to avoid out-of-bounds and undefined behavior
             assert(proof.len() >= 4, 'Proof too short');
 
-            // Check for duplicate commitment
-            assert(
-                !self.verified_commitments.read(commitment_hash), 'Commitment already processed',
-            );
-
-            // Verify the signature over the commitment_hash
+            // Then verify the signature for security
             let msg_hash: u256 = commitment_hash.into();
             let signature = Signature { r, s, y_parity };
             let eth_addr: EthAddress = eth_address.try_into().unwrap();
-
             // This will panic if the signature is invalid
             verify_eth_signature(msg_hash, signature, eth_addr);
+
+            // Now check for duplicate commitment
+            assert(
+                !self.verified_commitments.read(commitment_hash), 'Commitment already processed',
+            );
 
             let recipient_felt = *proof.at(0);
             let amount = *proof.at(1);
