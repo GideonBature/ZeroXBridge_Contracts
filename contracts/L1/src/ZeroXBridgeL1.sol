@@ -145,22 +145,22 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
         uint256 totalValue = 0;
 
         for (uint256 i = 0; i < supportedTokens.length; i++) {
-                address tokenAddr = supportedTokens[i];
+            address tokenAddr = supportedTokens[i];
 
-                // Use tokenReserves instead of actual balance
-                uint256 balance = tokenReserves[tokenAddr];
-                uint8 dec = tokenDecimals[tokenAddr];
+            // Use tokenReserves instead of actual balance
+            uint256 balance = tokenReserves[tokenAddr];
+            uint8 dec = tokenDecimals[tokenAddr];
 
-                // Pull the USD price (8-decimals)
-                uint256 price = getTokenPriceUSD(tokenAddr);
+            // Pull the USD price (8-decimals)
+            uint256 price = getTokenPriceUSD(tokenAddr);
 
-                //      value = balance * price / 1e8   --> this is USD value in token-units (18+8 decimals)
-                //      value = value / (10 ** dec)     --> normalize back to 18 decimals
-                uint256 usdRaw = (balance * price) / 1e8;
-                uint256 usdVal = (usdRaw * 1e18) / (10 ** dec);
+            //      value = balance * price / 1e8   --> this is USD value in token-units (18+8 decimals)
+            //      value = value / (10 ** dec)     --> normalize back to 18 decimals
+            uint256 usdRaw = (balance * price) / 1e8;
+            uint256 usdVal = (usdRaw * 1e18) / (10 ** dec);
 
-                totalValue += usdVal;
-            }
+            totalValue += usdVal;
+        }
 
         return totalValue;
     }
@@ -306,7 +306,6 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
         } else if (tokenData.assetType == AssetType.ERC20) {
             require(tokenData.tokenAddress != address(0), "ZeroXBridge: Invalid token address");
             require(tokenReserves[tokenData.tokenAddress] >= amount, "Insufficient token reserves");
-            
             // Decrement token reserves for ERC20
             tokenReserves[tokenData.tokenAddress] -= amount;
             emit TokenReserveUpdated(tokenData.tokenAddress, tokenReserves[tokenData.tokenAddress]);
