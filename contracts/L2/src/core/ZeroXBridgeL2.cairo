@@ -6,7 +6,13 @@ pub trait IZeroXBridgeL2<TContractState> {
     /// The proof structure assumes the first four elements contain recipient, usd_amount,
     /// block_hash
     fn mint_and_claim_xzb(
-        ref self: TContractState, proof: Array<felt252>, commitment_hash: felt252,
+        ref self: TContractState,
+        proof: Array<felt252>,
+        commitment_hash: felt252,
+        eth_address: felt252,
+        r: u256,
+        s: u256,
+        y_parity: bool,
     );
 
     fn burn_xzb_for_unlock(ref self: TContractState, amount: core::integer::u256);
@@ -46,6 +52,9 @@ pub mod ZeroXBridgeL2 {
     };
     use core::hash::{HashStateTrait, HashStateExTrait};
     use l2::core::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
+    use starknet::eth_address::EthAddress;
+    use starknet::eth_signature::verify_eth_signature;
+    use starknet::secp256_trait::Signature;
 
     const PRECISION: u256 = 1_000_000_000_000_000_000; // 18 decimals for precision
 
@@ -181,13 +190,28 @@ pub mod ZeroXBridgeL2 {
     #[abi(embed_v0)]
     impl MintBurnXzbImpl of super::IZeroXBridgeL2<ContractState> {
         fn mint_and_claim_xzb(
-            ref self: ContractState, proof: Array<felt252>, commitment_hash: felt252,
+            ref self: ContractState,
+            proof: Array<felt252>,
+            commitment_hash: felt252,
+            eth_address: felt252,
+            r: u256,
+            s: u256,
+            y_parity: bool,
         ) {
+            // Always check proof length first to avoid out-of-bounds and undefined behavior
+            assert(proof.len() >= 4, 'Proof too short');
+
+            // Then verify the signature for security
+            let msg_hash: u256 = commitment_hash.into();
+            let signature = Signature { r, s, y_parity };
+            let eth_address: EthAddress = eth_address.try_into().unwrap();
+
+            verify_eth_signature(msg_hash, signature, eth_address);
+
+            // Now check for duplicate commitment
             assert(
                 !self.verified_commitments.read(commitment_hash), 'Commitment already processed',
             );
-
-            assert(proof.len() >= 4, 'Proof too short');
 
             let recipient_felt = *proof.at(0);
             let amount = *proof.at(1);
