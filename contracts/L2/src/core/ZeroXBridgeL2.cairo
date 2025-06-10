@@ -204,9 +204,9 @@ pub mod ZeroXBridgeL2 {
             // Then verify the signature for security
             let msg_hash: u256 = commitment_hash.into();
             let signature = Signature { r, s, y_parity };
-            let eth_addr: EthAddress = eth_address.try_into().unwrap();
-            // This will panic if the signature is invalid
-            verify_eth_signature(msg_hash, signature, eth_addr);
+            let eth_address: EthAddress = eth_address.try_into().unwrap();
+
+            verify_eth_signature(msg_hash, signature, eth_address);
 
             // Now check for duplicate commitment
             assert(

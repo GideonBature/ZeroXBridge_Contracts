@@ -239,14 +239,12 @@ fn test_burn_xzb_insufficient_balance() {
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
 }
-#[test]
-fn test_process_mint_proof_happy_path() {
-    // Setup environment
-    let token_addr = deploy_xzb();
-    let proof_registry_addr = deploy_registry();
-    let oracle_addr = deploy_oracle();
-    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
 
+
+// Helper to generate a mock valid signature for a given hash (for test purposes only)
+fn create_mock_valid_signature(
+    oracle_addr: ContractAddress,
+) -> (Array<felt252>, u256, felt252, felt252, u256, u256, bool) {
     let recipient_addr = alice();
     let owner = owner();
 
@@ -275,8 +273,27 @@ fn test_process_mint_proof_happy_path() {
     };
     let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
 
-    // Print the commitment hash for use in JS signature generation
-    println!("commitment_hash: {:x}", commitment_hash);
+    // These values are only valid because the contract does not check real signature validity in
+    // tests In a real testnet/mainnet, you must use real signature generation
+    let r = 0xdb7f931f85905730249ab00dc21d3447951a14433fae8fd0ce9493e383cfc483;
+    let s = 0x76dab5874a39db99a82f069bb565c90e8f7f7bcae1c577a4e3ee4389e3faeb3a;
+    let y_parity = true;
+    let eth_address = 0xfa4ac62320eae94a6fc63d48030beb64016c5439;
+
+    (proof, amount, commitment_hash, eth_address, r, s, y_parity)
+}
+
+
+#[test]
+fn test_process_mint_proof_happy_path() {
+    // Setup environment
+    let token_addr = deploy_xzb();
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
+    let recipient_addr = alice();
+    let owner = owner();
 
     // Create spy to track events
     let mut spy = spy_events();
@@ -288,19 +305,16 @@ fn test_process_mint_proof_happy_path() {
     // For this example, we'll assume integrity verification passes
     // Process the mint proof
 
+    let (proof, amount, commitment_hash, eth_address, r, s, y_parity) = create_mock_valid_signature(
+        oracle_addr,
+    );
+
     IMockRegistryDispatcher { contract_address: proof_registry_addr }.set_should_succeed(true);
     IProofRegistryDispatcher { contract_address: proof_registry_addr }
         .register_deposit_proof(commitment_hash, merkle_root());
 
     // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
-
-    // Use valid signature values generated for the commitment hash
-    let eth_address = 0x30a12890B3c5535f714a33d89943eDf007dbb845.try_into().unwrap();
-    let r: u256 = 0x4ac6858340139bb74d09091f14a5cb67ab6a63b2bc3e217d931322af84a04a7a;
-    let s: u256 = 0x73ded3366f388b39c5f28db1df7c128264d1e8fce3e66053b2e9b1adedda4753;
-    let y_parity: bool = true;
-    let commitment_hash = 0x12315b7aa9abd71d79ebe6926844e4612925f04edcd18eb9c687d517f8a674;
 
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
         .mint_and_claim_xzb(proof, commitment_hash, eth_address, r, s, y_parity);
@@ -326,17 +340,6 @@ fn test_process_mint_proof_happy_path() {
     assert(balance == mint_amount, 'Tokens not minted correctly');
 }
 
-// Helper to generate a mock valid signature for a given hash (for test purposes only)
-fn mock_valid_signature(_commitment_hash: felt252) -> (felt252, u256, u256, bool) {
-    // These values are only valid because the contract does not check real signature validity in
-    // tests In a real testnet/mainnet, you must use real signature generation
-    let eth_address = 0xe80ef3b97e17BC5Ea1c1b79791B955342c68B47e.try_into().unwrap();
-    let r: u256 = 0x3e2db63f85f6dcd44aaee9c340361553feda42a98b4415653a5d6a966f8ead4b;
-    let s: u256 = 0x6e7edbe04d55d51ea77a0cab20995f2fc259726954a9ac93d57009be98d49001;
-    let y_parity: bool = false;
-    (eth_address, r, s, y_parity)
-}
-
 #[test]
 #[should_panic(expected: 'Commitment already processed')]
 fn test_duplicate_commitment_rejection() {
@@ -345,34 +348,11 @@ fn test_duplicate_commitment_rejection() {
     let proof_registry_addr = deploy_registry();
     let oracle_addr = deploy_oracle();
     let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
-
-    let recipient_addr = alice();
     let owner = owner();
 
-    // Create test data
-    let amount: u256 = 10000_u256 * PRECISION; // 10,000 USD
-
-    // Set total TVL in the oracle as 10,000 USD.
-    cheat_caller_address(oracle_addr, owner, CheatSpan::TargetCalls(1));
-    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(amount);
-
-    // Create mock proof array (recipient, amount, nonce, block_hash)
-    let amount_felt: felt252 = amount.try_into().unwrap();
-
-    let mut proof: Array<felt252> = array![];
-    proof.append(recipient_addr.into());
-    proof.append(amount_felt);
-    proof.append(nonce());
-    proof.append(time_stamp());
-
-    // Create commitment hash from mint data
-    let mint_data = MintData {
-        recipient: recipient_addr.into(),
-        amount: amount_felt,
-        nonce: nonce(),
-        time_stamp: time_stamp(),
-    };
-    let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+    let (proof, _, commitment_hash, eth_address, r, s, y_parity) = create_mock_valid_signature(
+        oracle_addr,
+    );
 
     IMockRegistryDispatcher { contract_address: proof_registry_addr }.set_should_succeed(true);
     IProofRegistryDispatcher { contract_address: proof_registry_addr }
@@ -380,20 +360,14 @@ fn test_duplicate_commitment_rejection() {
 
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));
 
-    // Use the same valid signature for both calls
-    let eth_address = 0x30a12890B3c5535f714a33d89943eDf007dbb845.try_into().unwrap();
-    let r: u256 = 0x4ac6858340139bb74d09091f14a5cb67ab6a63b2bc3e217d931322af84a04a7a;
-    let s: u256 = 0x73ded3366f388b39c5f28db1df7c128264d1e8fce3e66053b2e9b1adedda4753;
-    let y_parity: bool = true;
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
         .mint_and_claim_xzb(proof.clone(), commitment_hash, eth_address, r, s, y_parity);
     IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
         .mint_and_claim_xzb(proof, commitment_hash, eth_address, r, s, y_parity);
 }
-
 // Test for signature verification failure
 #[test]
-#[should_panic]
+#[should_panic(expected: 'Invalid signature')]
 fn test_invalid_signature_rejection() {
     // Setup environment
     let token_addr = deploy_xzb();
