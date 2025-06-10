@@ -37,10 +37,7 @@ pub mod ZeroXBridgeL2 {
     use starknet::{
         ContractAddress, get_caller_address, ClassHash, get_block_timestamp, get_contract_address,
     };
-    use l2::core::xZBERC20::{
-        IBurnableDispatcher, IBurnableDispatcherTrait, IMintableDispatcher,
-        IMintableDispatcherTrait, ISupplyDispatcher, ISupplyDispatcherTrait,
-    };
+    use l2::core::xZBERC20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
     use openzeppelin_token::erc20::interface::{IERC20DispatcherTrait, IERC20Dispatcher};
     use l2::core::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 
@@ -241,7 +238,7 @@ pub mod ZeroXBridgeL2 {
             let mint_amount = (usd_amount * mint_rate) / PRECISION;
 
             let token_addr = self.xzb_token.read();
-            IMintableDispatcher { contract_address: token_addr }.mint(recipient, mint_amount);
+            IXZBERC20Dispatcher { contract_address: token_addr }.mint(recipient, mint_amount);
 
             self
                 .emit(
@@ -267,7 +264,7 @@ pub mod ZeroXBridgeL2 {
                 .transfer_from(caller, protocol, amount);
 
             // Burn the xZB tokens
-            IBurnableDispatcher { contract_address: token_addr }.burn(amount);
+            IXZBERC20Dispatcher { contract_address: token_addr }.burn(amount);
 
             let current_nonce = self.burn_nonce.read(caller);
 
@@ -334,7 +331,7 @@ pub mod ZeroXBridgeL2 {
             let xzb_token = self.xzb_token.read();
 
             // Create dispatcher to call the ERC20 contract
-            let xzb_dispatcher = ISupplyDispatcher { contract_address: xzb_token };
+            let xzb_dispatcher = IERC20Dispatcher { contract_address: xzb_token };
 
             // Get total supply from the token contract
             xzb_dispatcher.total_supply()

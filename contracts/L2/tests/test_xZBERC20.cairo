@@ -1,7 +1,4 @@
-use l2::core::xZBERC20::{
-    IBurnableDispatcher, IBurnableDispatcherTrait, IMintableDispatcher, IMintableDispatcherTrait,
-    BRIDGE_ROLE,
-};
+use l2::core::xZBERC20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait, BRIDGE_ROLE};
 
 use openzeppelin_access::accesscontrol::interface::{
     IAccessControlDispatcher, IAccessControlDispatcherTrait,
@@ -38,7 +35,7 @@ fn minter() -> ContractAddress {
 
 fn mint(contract_address: ContractAddress, recipient: ContractAddress, amount: u256) {
     cheat_caller_address(contract_address, owner(), CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address }.mint(recipient, amount);
+    IXZBERC20Dispatcher { contract_address }.mint(recipient, amount);
 }
 
 fn grant_mint_role(contract_address: ContractAddress, user: ContractAddress) {
@@ -112,13 +109,13 @@ fn test_owner_can_mint() {
     let erc20 = IERC20Dispatcher { contract_address };
     let previous_balance = erc20.balance_of(owner);
     cheat_caller_address(contract_address, minter, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address }.mint(owner, amount);
+    IXZBERC20Dispatcher { contract_address }.mint(owner, amount);
     let balance = erc20.balance_of(owner);
     assert(balance - previous_balance == amount, 'Wrong amount after mint');
 
     let previous_balance = erc20.balance_of(alice);
     cheat_caller_address(contract_address, minter, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address }.mint(alice, amount);
+    IXZBERC20Dispatcher { contract_address }.mint(alice, amount);
     let balance = erc20.balance_of(alice);
     assert(balance - previous_balance == amount, 'Wrong amount after mint');
 }
@@ -130,7 +127,7 @@ fn test_only_granted_user_can_mint() {
     let contract_address = deploy_erc20();
 
     cheat_caller_address(contract_address, alice, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address }.mint(alice, 1000);
+    IXZBERC20Dispatcher { contract_address }.mint(alice, 1000);
 }
 
 #[test]
@@ -159,7 +156,7 @@ fn test_a_granted_user_can_mint() {
 
     let previous_balance = erc20.balance_of(alice);
     cheat_caller_address(contract_address, bob, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address }.mint(alice, amount);
+    IXZBERC20Dispatcher { contract_address }.mint(alice, amount);
     let balance = erc20.balance_of(alice);
     assert(balance - previous_balance == amount, 'Wrong amount after mint');
 }
@@ -177,7 +174,7 @@ fn test_a_revoked_user_can_not_mint() {
     IAccessControlDispatcher { contract_address }.revoke_role(BRIDGE_ROLE, minter);
 
     cheat_caller_address(contract_address, minter, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address }.mint(alice, amount);
+    IXZBERC20Dispatcher { contract_address }.mint(alice, amount);
 }
 
 #[test]
@@ -189,7 +186,7 @@ fn test_user_can_burn() {
     mint(contract_address, alice, amount);
     let previous_balance = erc20.balance_of(alice);
     cheat_caller_address(contract_address, alice, CheatSpan::TargetCalls(1));
-    IBurnableDispatcher { contract_address }.burn(amount);
+    IXZBERC20Dispatcher { contract_address }.burn(amount);
     let balance = erc20.balance_of(alice);
     assert(previous_balance - balance == amount, 'Wrong amount after burn');
 }
@@ -205,7 +202,7 @@ fn test_supply_is_updated_after_burn() {
 
     let previous_supply = erc20.total_supply();
     cheat_caller_address(contract_address, alice, CheatSpan::TargetCalls(1));
-    IBurnableDispatcher { contract_address }.burn(amount);
+    IXZBERC20Dispatcher { contract_address }.burn(amount);
     let supply = erc20.total_supply();
     assert(previous_supply - supply == amount, 'Wrong supply after burn');
 }
@@ -219,7 +216,7 @@ fn test_user_cant_burn_more_than_balance() {
     let erc20 = IERC20Dispatcher { contract_address };
     let balance = erc20.balance_of(alice);
     cheat_caller_address(contract_address, alice, CheatSpan::TargetCalls(1));
-    IBurnableDispatcher { contract_address }.burn(balance + 1);
+    IXZBERC20Dispatcher { contract_address }.burn(balance + 1);
 }
 
 #[test]
