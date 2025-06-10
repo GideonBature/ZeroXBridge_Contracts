@@ -4,22 +4,14 @@
 use starknet::ContractAddress;
 
 #[starknet::interface]
-pub trait IMintable<TContractState> {
+pub trait IXZBERC20<TContractState> {
+    // Mintable functions
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
-}
 
-#[starknet::interface]
-pub trait IBurnable<TContractState> {
+    // Burnable functions
     fn burn(ref self: TContractState, amount: u256);
-}
 
-#[starknet::interface]
-pub trait ISupply<TContractState> {
-    fn total_supply(self: @TContractState) -> u256;
-}
-
-#[starknet::interface]
-pub trait IManager<TContractState> {
+    // Manager functions
     fn set_bridge_address(ref self: TContractState, bridge: ContractAddress);
     fn get_bridge_address(self: @TContractState) -> ContractAddress;
 }
@@ -38,14 +30,13 @@ pub mod xZBERC20 {
 
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 
-    use super::{IBurnable, IMintable, IManager};
+    use super::{IXZBERC20};
     use super::{BRIDGE_ROLE, UPGRADER_ROLE};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
-
 
     // External
     #[abi(embed_v0)]
@@ -96,24 +87,18 @@ pub mod xZBERC20 {
     }
 
     #[abi(embed_v0)]
-    impl MintableImpl of IMintable<ContractState> {
+    impl XZBERC20Impl of IXZBERC20<ContractState> {
         fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256) {
             self.accesscontrol.assert_only_role(BRIDGE_ROLE);
             self.erc20.mint(recipient, amount);
         }
-    }
 
-    #[abi(embed_v0)]
-    impl BurnableImpl of IBurnable<ContractState> {
         fn burn(ref self: ContractState, amount: u256) {
+            // self.accesscontrol.assert_only_role(BRIDGE_ROLE);
             let burner = get_caller_address();
             self.erc20.burn(burner, amount);
         }
-    }
 
-
-    #[abi(embed_v0)]
-    impl ManagerImpl of IManager<ContractState> {
         fn set_bridge_address(ref self: ContractState, bridge: ContractAddress) {
             self.accesscontrol.grant_role(BRIDGE_ROLE, bridge);
             self.bridge.write(bridge);
@@ -127,7 +112,6 @@ pub mod xZBERC20 {
     //
     // Upgradeable
     //
-
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {

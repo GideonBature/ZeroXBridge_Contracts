@@ -8,9 +8,7 @@ use l2::core::ZeroXBridgeL2::{
     IDynamicRateDispatcherTrait,
 };
 use l2::core::ZeroXBridgeL2::ZeroXBridgeL2::{Event, BurnEvent, BurnData, MintEvent, MintData};
-use l2::core::xZBERC20::{
-    IMintableDispatcher, IMintableDispatcherTrait, IManagerDispatcher, IManagerDispatcherTrait,
-};
+use l2::core::xZBERC20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
 use l2::core::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
 use l2::core::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTrait};
@@ -89,7 +87,7 @@ fn deploy_bridge(
 
     // Give Bridge minter role
     cheat_caller_address(xzb_addr, owner(), CheatSpan::TargetCalls(1));
-    IManagerDispatcher { contract_address: xzb_addr }.set_bridge_address(contract_address);
+    IXZBERC20Dispatcher { contract_address: xzb_addr }.set_bridge_address(contract_address);
 
     contract_address
 }
@@ -107,11 +105,11 @@ fn test_burn_xzb_for_unlock_happy_path() {
     let burn_amount = 20_000_u256 * PRECISION;
 
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(owner_addr, 80_000_u256 * PRECISION);
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(owner_addr, 80_000_u256 * PRECISION);
 
     // Mint tokens to Alice.
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(2));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount);
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount);
 
     let balance = IERC20Dispatcher { contract_address: token_addr }.balance_of(alice_addr);
     assert!(balance == burn_amount, "Bridge balance not updated");
@@ -177,11 +175,11 @@ fn test_burn_xzb_updates_balance() {
     let erc20 = IERC20Dispatcher { contract_address: token_addr };
 
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(owner_addr, 80_000_u256 * PRECISION);
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(owner_addr, 80_000_u256 * PRECISION);
 
     // Mint tokens to Alice.
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(2));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount);
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount);
 
     let initial_balance = erc20.balance_of(alice_addr);
     assert!(initial_balance == burn_amount, "Bridge balance not updated");
@@ -223,7 +221,7 @@ fn test_burn_xzb_insufficient_balance() {
 
     // Mint fewer tokens than we attempt to burn.
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(alice_addr, 300_u256 * PRECISION);
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, 300_u256 * PRECISION);
 
     // Set total TVL in the oracle as 100,000 USD.
     cheat_caller_address(oracle_addr, owner_addr, CheatSpan::TargetCalls(1));

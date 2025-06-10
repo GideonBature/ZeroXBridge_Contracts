@@ -6,7 +6,7 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 use l2::dao::DAO::{IDAODispatcher, IDAODispatcherTrait, ProposalStatus, DAO};
-use l2::core::xZBERC20::{IMintableDispatcher, IMintableDispatcherTrait};
+use l2::core::xZBERC20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
 
 const DEFAULT_BINDING_THRESHOLD: u256 = 1_000_000;
 
@@ -58,7 +58,7 @@ fn feign_binding_votes(
 ) {
     let amount: u256 = 250_000;
     cheat_caller_address(xzb_token, owner(), CheatSpan::TargetCalls(1));
-    let token_dispatcher = IMintableDispatcher { contract_address: xzb_token };
+    let token_dispatcher = IXZBERC20Dispatcher { contract_address: xzb_token };
     token_dispatcher.mint(owner(), amount * voters_len.into());
     assert(voters_len <= 5, 'Max voters attained');
     let alice = alice();
@@ -304,7 +304,7 @@ fn test_submit_proposal_success() {
     let dao = deploy_dao(xzb_token);
 
     // Mint tokens to the owner
-    let mintable_dispatcher = IMintableDispatcher { contract_address: xzb_token };
+    let mintable_dispatcher = IXZBERC20Dispatcher { contract_address: xzb_token };
     cheat_caller_address(xzb_token, owner, CheatSpan::TargetCalls(1));
     mintable_dispatcher.mint(owner, 1000.into());
 
@@ -377,7 +377,7 @@ fn test_proposal_id_increment() {
 
     // Mint tokens to the owner
     cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
-    IMintableDispatcher { contract_address: token_addr }.mint(owner, 1000.into());
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(owner, 1000.into());
 
     let dao = deploy_dao(token_addr); // Pass the ContractAddress to deploy_dao
 
@@ -413,7 +413,7 @@ fn test_vote_successfully() {
     let xzb_token = deploy_xzb();
     let dao = deploy_dao(xzb_token);
 
-    let mintable_dispatcher = IMintableDispatcher { contract_address: xzb_token };
+    let mintable_dispatcher = IXZBERC20Dispatcher { contract_address: xzb_token };
     cheat_caller_address(xzb_token, owner, CheatSpan::TargetCalls(1));
     mintable_dispatcher.mint(alice, 1000.into());
 
@@ -435,7 +435,7 @@ fn test_vote_should_panic_if_proposal_not_in_voting_phase() {
     let xzb_token = deploy_xzb();
     let dao = deploy_dao(xzb_token);
 
-    let mintable_dispatcher = IMintableDispatcher { contract_address: xzb_token };
+    let mintable_dispatcher = IXZBERC20Dispatcher { contract_address: xzb_token };
     cheat_caller_address(xzb_token, owner, CheatSpan::TargetCalls(1));
     mintable_dispatcher.mint(alice, 1000.into());
 
@@ -455,7 +455,7 @@ fn test_vote_should_panic_if_voter_already_voted() {
     let xzb_token = deploy_xzb();
     let dao = deploy_dao(xzb_token);
 
-    let mintable_dispatcher = IMintableDispatcher { contract_address: xzb_token };
+    let mintable_dispatcher = IXZBERC20Dispatcher { contract_address: xzb_token };
     cheat_caller_address(xzb_token, owner, CheatSpan::TargetCalls(1));
     mintable_dispatcher.mint(alice, 1000.into());
 
@@ -498,7 +498,7 @@ fn test_vote_successfully_emmitted() {
     let xzb_token = deploy_xzb();
     let dao = deploy_dao(xzb_token);
 
-    let mintable_dispatcher = IMintableDispatcher { contract_address: xzb_token };
+    let mintable_dispatcher = IXZBERC20Dispatcher { contract_address: xzb_token };
     cheat_caller_address(xzb_token, owner, CheatSpan::TargetCalls(1));
     mintable_dispatcher.mint(alice, 1000.into());
 
