@@ -5,7 +5,10 @@ libs = ["lib"]
 optimizer = true
 optimizer_runs = 200
 
-remappings = ["@openzeppelin/=lib/openzeppelin-contracts/"]
+remappings = [
+  "@openzeppelin/=lib/openzeppelin-contracts/",
+  "@soliditymmr/=lib/solidity-mmr/",
+]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 via_ir = true
