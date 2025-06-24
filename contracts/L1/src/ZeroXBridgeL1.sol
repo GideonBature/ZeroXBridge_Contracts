@@ -11,8 +11,9 @@ import "forge-std/console.sol";
 import "../utils/ElipticCurve.sol";
 import "../utils/Starknet.sol";
 import "./ProofRegistry.sol";
+import "./MerkleManager.sol";
 
-contract ZeroXBridgeL1 is Ownable, Starknet {
+contract ZeroXBridgeL1 is Ownable, Starknet, MerkleManager {
     using ECDSA for bytes32;
 
     // Proof Registry
@@ -227,12 +228,15 @@ contract ZeroXBridgeL1 is Ownable, Starknet {
         nextDepositNonce[user] = nonce + 1;
 
         // Generate commitment hash
-        uint256 commitmentHash = uint256(keccak256(abi.encodePacked(userRecord[user], usdVal, nonce, block.timestamp)));
+        bytes32 commitmentHash = keccak256(abi.encodePacked(userRecord[user], usdVal, nonce, block.timestamp));
+
+        // Append to Merkle tree
+        appendDepositHash(commitmentHash);
 
         // Emit deposit event
-        emit DepositEvent(tokenAddress, assetType, usdVal, user, commitmentHash);
+        emit DepositEvent(tokenAddress, assetType, usdVal, user, uint256(commitmentHash));
 
-        return commitmentHash;
+        return uint256(commitmentHash);
     }
 
     /**
