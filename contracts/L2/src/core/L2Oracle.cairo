@@ -1,12 +1,3 @@
-use starknet::ContractAddress;
-
-#[starknet::interface]
-pub trait IL2Oracle<TContractState> {
-    fn get_total_tvl(self: @TContractState) -> u256;
-    fn set_total_tvl(ref self: TContractState, tvl: u256);
-    fn set_relayer(ref self: TContractState, relayer: ContractAddress, status: bool);
-}
-
 #[starknet::contract]
 pub mod L2Oracle {
     use starknet::{ContractAddress, get_caller_address};
@@ -15,6 +6,7 @@ pub mod L2Oracle {
     use starknet::storage::{
         StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map,
     };
+    use l2::interfaces::IL2Oracle::IL2Oracle;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
 
@@ -59,7 +51,7 @@ pub mod L2Oracle {
     }
 
     #[abi(embed_v0)]
-    impl L2Oracle of super::IL2Oracle<ContractState> {
+    impl L2Oracle of IL2Oracle<ContractState> {
         fn get_total_tvl(self: @ContractState) -> u256 {
             self.total_tvl.read()
         }

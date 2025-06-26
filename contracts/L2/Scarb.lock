@@ -2,6 +2,11 @@
 version = 1
 
 [[package]]
+name = "cairo_lib"
+version = "0.2.0"
+source = "git+https://github.com/HerodotusDev/cairo-lib.git#a0c0ee4feeb4edb61e7a35d29595ad8647c3d469"
+
+[[package]]
 name = "integrity"
 version = "2.0.0"
 source = "registry+https://scarbs.xyz/"
@@ -11,6 +16,7 @@ checksum = "sha256:f5e91cd5280bc0c02cfb12ce1a521e25064956dd12f3e38fca3d841c53872
 name = "l2"
 version = "0.1.0"
 dependencies = [
+ "cairo_lib",
  "integrity",
  "openzeppelin_access",
  "openzeppelin_introspection",

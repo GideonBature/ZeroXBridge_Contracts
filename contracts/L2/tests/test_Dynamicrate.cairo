@@ -1,5 +1,5 @@
 use openzeppelin_utils::serde::SerializedAppend;
-use l2::core::ZeroXBridgeL2::{IDynamicRateDispatcher, IDynamicRateDispatcherTrait};
+use l2::interfaces::IZeroXBridgeL2::{IDynamicRateDispatcher, IDynamicRateDispatcherTrait};
 use snforge_std::{CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address, declare};
 use starknet::{ContractAddress, contract_address_const};
 
