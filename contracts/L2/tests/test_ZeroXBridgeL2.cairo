@@ -3,14 +3,14 @@ use snforge_std::{
     cheat_caller_address,
 };
 
-use l2::core::ZeroXBridgeL2::{
+use l2::interfaces::IZeroXBridgeL2::{
     IZeroXBridgeL2Dispatcher, IZeroXBridgeL2DispatcherTrait, IDynamicRateDispatcher,
     IDynamicRateDispatcherTrait,
 };
 use l2::core::ZeroXBridgeL2::ZeroXBridgeL2::{Event, BurnEvent, BurnData, MintEvent, MintData};
-use l2::core::xZBERC20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
-use l2::core::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
-use l2::core::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
+use l2::interfaces::IProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
+use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTrait};
 use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};

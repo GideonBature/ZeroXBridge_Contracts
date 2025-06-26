@@ -2,19 +2,6 @@ use integrity::{
     calculate_bootloaded_fact_hash, SHARP_BOOTLOADER_PROGRAM_HASH, VerifierConfiguration,
 };
 
-#[starknet::interface]
-pub trait IProofRegistry<TContractState> {
-    // Get the merkle root of commitment hash if it was verified.
-    fn get_verified_merkle_root(self: @TContractState, commitment_hash: felt252) -> felt252;
-
-    fn check_proof(self: @TContractState, commitment_hash: felt252, merkle_root: felt252) -> bool;
-
-    // Prove given commitment_hash with proof verified by Integrity.
-    fn register_deposit_proof(
-        ref self: TContractState, commitment_hash: felt252, merkle_root: felt252,
-    );
-}
-
 // Calculate fact hash for cairo1 programs bootloaded in cairo0 by Atlantic.
 fn calculate_cairo1_fact_hash(
     program_hash: felt252, input: Span<felt252>, output: Span<felt252>,
@@ -76,6 +63,7 @@ mod ProofRegistry {
         Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
     };
     use integrity::{Integrity, IntegrityWithConfig};
+    use l2::interfaces::IProofRegistry::IProofRegistry;
 
     #[storage]
     struct Storage {

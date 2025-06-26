@@ -12,6 +12,7 @@ openzeppelin_access = "0.20.0"
 openzeppelin_introspection = "0.20.0"
 openzeppelin_token = "0.20.0"
 openzeppelin_upgrades = "0.20.0"
+cairo_lib = { git = "https://github.com/HerodotusDev/cairo-lib.git" }
 
 [dev-dependencies]
 assert_macros = "2.9.2"
