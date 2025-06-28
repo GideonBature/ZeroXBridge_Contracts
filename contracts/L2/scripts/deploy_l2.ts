@@ -222,18 +222,6 @@ async function getStarknetRpcUrl(config: DeploymentConfig, network: string): Pro
     }
 }
 
-async function getNetwork(config: DeploymentConfig): Promise<void> {
-    if (!config.network) {
-        config.network = process.env.STARKNET_NETWORK;
-    }
-    if (!config.network) {
-        config.network = await ask("Enter network (sepolia/mainnet/devnet): ") as string;
-    }
-    if (!config.network) {
-        config.network = "sepolia";
-    }
-}
-
 async function getOwnerAddress(config: DeploymentConfig): Promise<void> {
     if (!config.owner) {
         config.owner = process.env.OWNER_ADDRESS || config.accountAddress;
@@ -675,32 +663,6 @@ async function main(): Promise<void> {
             const options = program.opts();
             let config = await loadConfiguration(options.config, "devnet");
             await deploymentDevnet(config);
-        });
-
-    program
-        .command("status")
-        .description("Show current deployment status for a specific network.")
-        .option("-n, --network <network>", "Network to show status for (sepolia/mainnet/devnet)", "sepolia")
-        .action(async (options) => {
-            const deploymentState = loadDeploymentState(options.network);
-            if (Object.keys(deploymentState).length === 0) {
-                console.log(`No deployments found for ${options.network}.`);
-                return;
-            }
-
-            console.log(`\n📋 Current Deployment Status for ${options.network}:`);
-            console.log("=".repeat(50));
-            
-            for (const [contractName, deployment] of Object.entries(deploymentState)) {
-                console.log(`\n${contractName}:`);
-                console.log(`  Address: ${deployment.address}`);
-                console.log(`  Class Hash: ${deployment.classHash}`);
-                console.log(`  Declare Tx: ${deployment.declareTx}`);
-                console.log(`  Deploy Tx: ${deployment.deploymentTx}`);
-                console.log(`  Network: ${deployment.network}`);
-                console.log(`  Deployed: ${new Date(deployment.timestamp).toLocaleString()}`);
-            }
-            console.log();
         });
 
     await program.parseAsync();

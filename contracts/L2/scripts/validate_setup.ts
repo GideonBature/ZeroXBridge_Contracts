@@ -71,22 +71,6 @@ async function validateSetup(): Promise<void> {
         });
     }
 
-    // Check npm dependencies
-    try {
-        execSync("npm list --depth=0", { stdio: "pipe" });
-        results.push({
-            name: "NPM Dependencies",
-            status: "✅",
-            message: "All dependencies installed"
-        });
-    } catch {
-        results.push({
-            name: "NPM Dependencies",
-            status: "❌",
-            message: "Run 'npm install' to install dependencies"
-        });
-    }
-
     // Print results
     console.log("📋 Validation Results:");
     console.log("=====================\n");
@@ -116,15 +100,6 @@ async function validateSetup(): Promise<void> {
     } else {
         console.log("⚠️  Please fix the failed checks before deploying.");
         console.log("\nRecommended actions:");
-        if (results.some(r => r.name.includes("snforge") && r.status === "❌")) {
-            console.log("1. Install Starknet Foundry");
-        }
-        if (results.some(r => r.name.includes("Node.js") && r.status === "❌")) {
-            console.log("2. Update Node.js to version 16 or higher");
-        }
-        if (results.some(r => r.name.includes("Dependencies") && r.status === "❌")) {
-            console.log("3. Run 'npm install'");
-        }
         if (!allEnvPresent) {
             console.log("4. Set up required environment variables");
         }
