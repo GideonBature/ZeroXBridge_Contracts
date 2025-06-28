@@ -59,6 +59,10 @@ fn test_append_one_leaf() {
     // Check leaves count
     let leaves_count = merkle_manager.get_leaves_count();
     assert(leaves_count == 1, 'Leaves count should be 1');
+
+    println!("{:?}", last_peaks);
+    println!("Root hash: {}", root_hash);
+    println!("Element count: {}", element_count);
 }
 
 
@@ -168,6 +172,42 @@ fn test_verify_proof_one_leaf() {
         leaf_one(), // commitment_hash
         peaks, // peaks
         array![] // proof
+        );
+
+    assert(res.unwrap(), 'Proof should be valid');
+
+    let last_peaks = merkle_manager.get_last_peaks();
+
+    // Check peaks
+    assert(last_peaks.len() == 1, 'Last peaks should not be empty');
+    assert(last_peaks[0] != @0, 'First peak should not be zero');
+
+    // Check root hash
+    let root_hash = merkle_manager.get_root_hash();
+    assert(root_hash != 0, 'Root hash should not be zero');
+
+    // Check element count
+    let element_count = merkle_manager.get_element_count();
+    assert(element_count == 1, 'Element count should be 1');
+
+    // Check leaves count
+    let leaves_count = merkle_manager.get_leaves_count();
+    assert(leaves_count == 1, 'Leaves count should be 1');
+
+    println!("Leaf {:?}", leaf_one());
+    println!("Leaf Index: 1");
+    println!("Peaks {:?}", last_peaks);
+    println!("Root hash: {}", root_hash);
+
+    let peak1 = 3085182978037364507644541379307921604860861694664657935759708330416374536741;
+    let peaks1 = array![peak1];
+
+    let res = merkle_manager
+        .verify_proof(
+            1, // index
+            3085182978037364507644541379307921604860861694664657935759708330416374536741, // commitment_hash
+            peaks1, // peaks
+            array![] // proof
         );
 
     assert(res.unwrap(), 'Proof should be valid');

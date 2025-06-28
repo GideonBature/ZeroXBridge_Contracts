@@ -10,9 +10,6 @@ import {console} from "forge-std/console.sol";
  * @dev Manages deposit commitments and synced withdrawal roots for ZeroXBridge protocol
  */
 contract MerkleManager {
-    // Root hash of the tree
-    bytes32 internal treeRoot;
-
     // Mapping of node index to relative root hash
     mapping(uint256 => bytes32) internal nodeIndexToRoot;
 
@@ -39,7 +36,7 @@ contract MerkleManager {
     // The deposit commitment hash
     // The new root hash after append
     // The new number of elements in the tree
-    event DepositHashAppended(uint256 index, bytes32 commitmentHash, bytes32 rootHash, uint256 elementsCount);
+    event DepositHashAppended(uint256 index, bytes32 commitmentHash, bytes32 rootHash);
 
     /**
      * @dev Appends a new deposit commitment to the tree.
@@ -60,10 +57,10 @@ contract MerkleManager {
 
         // Increment leaves count and map commitment hash to its index
         leavesCount += 1;
-        commitmentHashToIndex[commitmentHash] = leavesCount;
+        commitmentHashToIndex[commitmentHash] = nextElementsCount;
 
         // Emit event for the appended deposit
-        emit DepositHashAppended(leavesCount, commitmentHash, lastRoot, lastElementsCount);
+        emit DepositHashAppended(lastElementsCount, commitmentHash, lastRoot);
     }
 
     /**
@@ -84,10 +81,10 @@ contract MerkleManager {
 
             // Increment leaves count and map commitment hash to its index
             leavesCount += 1;
-            commitmentHashToIndex[commitmentHashes[i]] = leavesCount;
+            commitmentHashToIndex[commitmentHashes[i]] = nextElementsCount;
 
             // Emit event for each appended deposit
-            emit DepositHashAppended(leavesCount, commitmentHashes[i], lastRoot, lastElementsCount);
+            emit DepositHashAppended(lastElementsCount, commitmentHashes[i], lastRoot);
         }
 
         // Update contract state with new peaks, root, and element count
