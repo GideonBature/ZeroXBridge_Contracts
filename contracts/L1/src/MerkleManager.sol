@@ -36,7 +36,7 @@ contract MerkleManager {
     // The deposit commitment hash
     // The new root hash after append
     // The new number of elements in the tree
-    event DepositHashAppended(uint256 index, bytes32 commitmentHash, bytes32 rootHash);
+    event DepositHashAppended(uint256 index, bytes32 commitmentHash, bytes32 rootHash, uint256 elementsCount);
 
     /**
      * @dev Appends a new deposit commitment to the tree.
@@ -57,10 +57,10 @@ contract MerkleManager {
 
         // Increment leaves count and map commitment hash to its index
         leavesCount += 1;
-        commitmentHashToIndex[commitmentHash] = nextElementsCount;
+        commitmentHashToIndex[commitmentHash] = leavesCount;
 
         // Emit event for the appended deposit
-        emit DepositHashAppended(lastElementsCount, commitmentHash, lastRoot);
+        emit DepositHashAppended(leavesCount, commitmentHash, lastRoot, lastElementsCount);
     }
 
     /**
@@ -81,10 +81,10 @@ contract MerkleManager {
 
             // Increment leaves count and map commitment hash to its index
             leavesCount += 1;
-            commitmentHashToIndex[commitmentHashes[i]] = nextElementsCount;
+            commitmentHashToIndex[commitmentHashes[i]] = leavesCount;
 
             // Emit event for each appended deposit
-            emit DepositHashAppended(lastElementsCount, commitmentHashes[i], lastRoot);
+            emit DepositHashAppended(leavesCount, commitmentHashes[i], lastRoot, lastElementsCount);
         }
 
         // Update contract state with new peaks, root, and element count
