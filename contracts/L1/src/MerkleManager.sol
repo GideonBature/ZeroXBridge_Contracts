@@ -10,9 +10,6 @@ import {console} from "forge-std/console.sol";
  * @dev Manages deposit commitments and synced withdrawal roots for ZeroXBridge protocol
  */
 contract MerkleManager {
-    // Root hash of the tree
-    bytes32 internal treeRoot;
-
     // Mapping of node index to relative root hash
     mapping(uint256 => bytes32) internal nodeIndexToRoot;
 

@@ -12,7 +12,7 @@ pub mod ZeroXBridgeL2 {
     use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 
     use core::option::Option;
-    use core::pedersen::PedersenTrait;
+    use core::poseidon::PoseidonTrait;
     use core::array::ArrayTrait;
     use starknet::storage::{
         StoragePointerReadAccess, StoragePointerWriteAccess, Map, StorageMapReadAccess,
@@ -84,7 +84,7 @@ pub mod ZeroXBridgeL2 {
         pub time_stamp: felt252,
     }
 
-    #[derive(Drop, Hash)]
+    #[derive(Debug, Drop, Hash)]
     pub struct MintData {
         pub recipient: felt252,
         pub amount: felt252,
@@ -211,7 +211,7 @@ pub mod ZeroXBridgeL2 {
             let time_stamp = *proof.at(3);
 
             let mint_data = MintData { recipient: recipient_felt, amount, nonce, time_stamp };
-            let computed_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+            let computed_hash = PoseidonTrait::new().update_with(mint_data).finalize();
 
             let usd_amount: u256 = amount.into();
 
@@ -270,7 +270,7 @@ pub mod ZeroXBridgeL2 {
                 time_stamp: get_block_timestamp().into(),
             };
 
-            let commitment_hash = PedersenTrait::new(0).update_with(data_to_hash).finalize();
+            let commitment_hash = PoseidonTrait::new().update_with(data_to_hash).finalize();
 
             // Append the withdrawal hash to the Merkle tree
             self.append_withdrawal_hash(commitment_hash);

@@ -15,7 +15,7 @@ use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTr
 use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 use core::integer::u256;
-use core::pedersen::PedersenTrait;
+use core::poseidon::PoseidonTrait;
 use core::hash::{HashStateTrait, HashStateExTrait};
 use openzeppelin_utils::serde::SerializedAppend;
 
@@ -34,7 +34,7 @@ fn owner() -> ContractAddress {
 
 
 fn time_stamp() -> felt252 {
-    00000000000000000000011111111111111111111122222222222222222222222222222222
+    1234_567_890_123
 }
 
 fn merkle_root() -> felt252 {
@@ -143,7 +143,7 @@ fn test_burn_xzb_for_unlock_happy_path() {
         time_stamp: get_block_timestamp().into(),
     };
 
-    let expected_hash = PedersenTrait::new(0).update_with(data_to_hash).finalize();
+    let expected_hash = PoseidonTrait::new().update_with(data_to_hash).finalize();
 
     // Build expected event value.
     let expected_event = (
@@ -260,6 +260,7 @@ fn create_mock_valid_signature(
     proof.append(recipient_addr.into());
     proof.append(amount_felt);
     proof.append(nonce());
+
     proof.append(time_stamp());
 
     // Create commitment hash from mint data
@@ -269,14 +270,19 @@ fn create_mock_valid_signature(
         nonce: nonce(),
         time_stamp: time_stamp(),
     };
-    let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+
+    println!("Mint data {:?}", mint_data);
+
+    let commitment_hash = PoseidonTrait::new().update_with(mint_data).finalize();
+
+    println!("Commitment hash {:?}", commitment_hash);
 
     // These values are only valid because the contract does not check real signature validity in
     // tests In a real testnet/mainnet, you must use real signature generation
-    let r = 0xdb7f931f85905730249ab00dc21d3447951a14433fae8fd0ce9493e383cfc483;
-    let s = 0x76dab5874a39db99a82f069bb565c90e8f7f7bcae1c577a4e3ee4389e3faeb3a;
+    let r = 0x00499525b50901d2d21c4bde01670bf59f93a1027bcf4b691ae77b97c2393818;
+    let s = 0x02fa9b8cbaffff58cfeabf515d4fd98881a35978dd5eb23a798f9793c057257e;
     let y_parity = true;
-    let eth_address = 0xfa4ac62320eae94a6fc63d48030beb64016c5439;
+    let eth_address = 0xe127b3388ee9985ee4d56779bf02d83f0ec53bb7;
 
     (proof, amount, commitment_hash, eth_address, r, s, y_parity)
 }
@@ -399,7 +405,7 @@ fn test_invalid_signature_rejection() {
         nonce: nonce(),
         time_stamp: time_stamp(),
     };
-    let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+    let commitment_hash = PoseidonTrait::new().update_with(mint_data).finalize();
 
     IMockRegistryDispatcher { contract_address: proof_registry_addr }.set_should_succeed(true);
     IProofRegistryDispatcher { contract_address: proof_registry_addr }
@@ -447,7 +453,7 @@ fn test_insufficient_proof_data() {
         nonce: nonce(),
         time_stamp: time_stamp(),
     };
-    let commitment_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+    let commitment_hash = PoseidonTrait::new().update_with(mint_data).finalize();
 
     // cheat_caller_address(token_addr, owner, CheatSpan::TargetCalls(1));
     cheat_caller_address(bridge_addr, owner, CheatSpan::TargetCalls(1));

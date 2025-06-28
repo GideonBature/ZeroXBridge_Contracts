@@ -7,7 +7,7 @@ async function signMessage() {
 
   // Message to sign
   const commitmentHash =
-    "0x12315b7aa9abd71d79ebe6926844e4612925f04edcd18eb9c687d517f8a674";
+    "1326957454500212857584915954277079662437048521450069746464967743209781177277";
 
   console.log("Commitment hash:", commitmentHash);
 
