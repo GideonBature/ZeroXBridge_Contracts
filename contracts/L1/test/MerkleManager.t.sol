@@ -31,6 +31,7 @@ contract MerkleManagerTest is Test {
         logPeaks();
 
         // Compute the expected node hash for the first element
+        // hash(index, value)
         bytes32 node1 = keccak256(abi.encode(uint256(1), bytes32(uint256(1))));
         peaks = StatelessMmrHelpers.newArrWithElem(peaks, node1);
 
@@ -65,13 +66,14 @@ contract MerkleManagerTest is Test {
 
         // Verify previous element with new peaks and root hash
         bytes32[] memory proof2 = new bytes32[](0);
+        // hash(index, value)
         bytes32 node2 = keccak256(abi.encode(uint256(2), bytes32(uint256(2))));
         proof2 = StatelessMmrHelpers.newArrWithElem(proof2, node2);
 
         StatelessMmr.verifyProof(
             1, // index
             bytes32(uint256(1)), // leaf
-            proof2, // proof2 (includes node2)
+            proof2, // proof2 (includes node2) hash of neighbouring nodes
             merkleManager.getLastPeaks(), // current peaks
             3, // size
             merkleManager.getRootHash() // root hash

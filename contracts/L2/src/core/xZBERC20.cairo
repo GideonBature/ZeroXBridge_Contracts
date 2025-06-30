@@ -1,21 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Compatible with OpenZeppelin Contracts for Cairo ^0.20.0
 
-use starknet::ContractAddress;
-
-#[starknet::interface]
-pub trait IXZBERC20<TContractState> {
-    // Mintable functions
-    fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
-
-    // Burnable functions
-    fn burn(ref self: TContractState, amount: u256);
-
-    // Manager functions
-    fn set_bridge_address(ref self: TContractState, bridge: ContractAddress);
-    fn get_bridge_address(self: @TContractState) -> ContractAddress;
-}
-
 pub const BRIDGE_ROLE: felt252 = selector!("BRIDGE_ROLE");
 pub const UPGRADER_ROLE: felt252 = selector!("UPGRADER_ROLE");
 
@@ -30,7 +15,7 @@ pub mod xZBERC20 {
 
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 
-    use super::{IXZBERC20};
+    use l2::interfaces::IxZBErc20::IXZBERC20;
     use super::{BRIDGE_ROLE, UPGRADER_ROLE};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);

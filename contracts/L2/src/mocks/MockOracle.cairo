@@ -6,7 +6,7 @@ pub mod MockL2Oracle {
     use starknet::storage::{
         StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map,
     };
-    use l2::core::L2Oracle::{IL2Oracle};
+    use l2::interfaces::IL2Oracle::IL2Oracle;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
 

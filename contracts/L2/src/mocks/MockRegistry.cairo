@@ -9,7 +9,7 @@ mod MockProofRegistry {
     use starknet::storage::{
         Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
     };
-    use l2::core::ProofRegistry::{IProofRegistry};
+    use l2::interfaces::IProofRegistry::IProofRegistry;
     use integrity::{Integrity, IntegrityWithConfig};
 
     #[storage]

@@ -1,33 +1,3 @@
-use starknet::ContractAddress;
-use core::option::Option;
-
-#[starknet::interface]
-pub trait IZeroXBridgeL2<TContractState> {
-    /// The proof structure assumes the first four elements contain recipient, usd_amount,
-    /// block_hash
-    fn mint_and_claim_xzb(
-        ref self: TContractState,
-        proof: Array<felt252>,
-        commitment_hash: felt252,
-        eth_address: felt252,
-        r: u256,
-        s: u256,
-        y_parity: bool,
-    );
-
-    fn burn_xzb_for_unlock(ref self: TContractState, amount: core::integer::u256);
-}
-
-#[starknet::interface]
-pub trait IDynamicRate<TContractState> {
-    fn get_dynamic_rate(self: @TContractState) -> u256;
-    fn get_current_xzb_supply(self: @TContractState) -> u256;
-    fn set_rates(ref self: TContractState, min_rate: Option<u256>, max_rate: Option<u256>);
-    fn set_oracle(ref self: TContractState, oracle: ContractAddress);
-    fn set_xzb_token(ref self: TContractState, xzb_token: ContractAddress);
-}
-
-
 #[starknet::contract]
 pub mod ZeroXBridgeL2 {
     use openzeppelin_access::ownable::OwnableComponent;
@@ -37,21 +7,29 @@ pub mod ZeroXBridgeL2 {
     use starknet::{
         ContractAddress, get_caller_address, ClassHash, get_block_timestamp, get_contract_address,
     };
-    use l2::core::xZBERC20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
+    use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
     use openzeppelin_token::erc20::interface::{IERC20DispatcherTrait, IERC20Dispatcher};
-    use l2::core::L2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+    use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
 
     use core::option::Option;
-    use core::pedersen::PedersenTrait;
+    use core::poseidon::PoseidonTrait;
+    use core::array::ArrayTrait;
     use starknet::storage::{
         StoragePointerReadAccess, StoragePointerWriteAccess, Map, StorageMapReadAccess,
-        StorageMapWriteAccess,
+        StorageMapWriteAccess, Vec, VecTrait, MutableVecTrait,
     };
     use core::hash::{HashStateTrait, HashStateExTrait};
-    use l2::core::ProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
+
+    use l2::interfaces::IProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
+    use l2::interfaces::IZeroXBridgeL2::{IDynamicRate, IZeroXBridgeL2};
+    use l2::interfaces::IMerkleManager::IMerkleManager;
+
     use starknet::eth_address::EthAddress;
     use starknet::eth_signature::verify_eth_signature;
     use starknet::secp256_trait::Signature;
+    use cairo_lib::data_structures::mmr::mmr::MMR;
+    use cairo_lib::data_structures::mmr::mmr::MMRTrait;
+
 
     const PRECISION: u256 = 1_000_000_000_000_000_000; // 18 decimals for precision
 
@@ -90,6 +68,12 @@ pub mod ZeroXBridgeL2 {
         verified_roots: Map<felt252, felt252>,
         burn_nonce: Map<ContractAddress, felt252>,
         rates: Rates,
+        // Merkle Manager Storage
+        mmr: MMR,
+        node_index_to_root: Map<usize, felt252>,
+        commitment_hash_to_index: Map<felt252, felt252>,
+        last_peaks: Vec<felt252>,
+        leaves_count: felt252,
     }
 
     #[derive(Drop, Hash)]
@@ -100,13 +84,14 @@ pub mod ZeroXBridgeL2 {
         pub time_stamp: felt252,
     }
 
-    #[derive(Drop, Hash)]
+    #[derive(Debug, Drop, Hash)]
     pub struct MintData {
         pub recipient: felt252,
         pub amount: felt252,
         pub nonce: felt252,
         pub time_stamp: felt252,
     }
+
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -117,6 +102,7 @@ pub mod ZeroXBridgeL2 {
         OracleUpdated: OracleUpdated,
         XZBTokenUpdated: XZBTokenUpdated,
         RateLimitsUpdated: RateLimitsUpdated,
+        WithdrawalHashAppended: WithdrawalHashAppended,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
         #[flat]
@@ -166,6 +152,13 @@ pub mod ZeroXBridgeL2 {
         pub commitment_hash: felt252,
     }
 
+    #[derive(Drop, Debug, starknet::Event)]
+    pub struct WithdrawalHashAppended {
+        pub index: felt252,
+        pub commitment_hash: felt252,
+        pub root_hash: felt252,
+    }
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -182,10 +175,12 @@ pub mod ZeroXBridgeL2 {
         self.oracle_address.write(oracle_address);
         let rates = Rates { min_rate, max_rate };
         self.rates.write(rates);
+        let mmr: MMR = Default::default();
+        self.mmr.write(mmr);
     }
 
     #[abi(embed_v0)]
-    impl MintBurnXzbImpl of super::IZeroXBridgeL2<ContractState> {
+    impl MintBurnXzbImpl of IZeroXBridgeL2<ContractState> {
         fn mint_and_claim_xzb(
             ref self: ContractState,
             proof: Array<felt252>,
@@ -216,7 +211,7 @@ pub mod ZeroXBridgeL2 {
             let time_stamp = *proof.at(3);
 
             let mint_data = MintData { recipient: recipient_felt, amount, nonce, time_stamp };
-            let computed_hash = PedersenTrait::new(0).update_with(mint_data).finalize();
+            let computed_hash = PoseidonTrait::new().update_with(mint_data).finalize();
 
             let usd_amount: u256 = amount.into();
 
@@ -275,7 +270,10 @@ pub mod ZeroXBridgeL2 {
                 time_stamp: get_block_timestamp().into(),
             };
 
-            let commitment_hash = PedersenTrait::new(0).update_with(data_to_hash).finalize();
+            let commitment_hash = PoseidonTrait::new().update_with(data_to_hash).finalize();
+
+            // Append the withdrawal hash to the Merkle tree
+            self.append_withdrawal_hash(commitment_hash);
 
             self.burn_nonce.write(caller, current_nonce + 1);
 
@@ -292,7 +290,7 @@ pub mod ZeroXBridgeL2 {
     }
 
     #[abi(embed_v0)]
-    impl DynamicRateImpl of super::IDynamicRate<ContractState> {
+    impl DynamicRateImpl of IDynamicRate<ContractState> {
         fn get_dynamic_rate(self: @ContractState) -> u256 {
             // Get current total TVL from oracle
             let oracle_dispatcher = IL2OracleDispatcher {
@@ -382,6 +380,107 @@ pub mod ZeroXBridgeL2 {
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.upgradeable.upgrade(new_class_hash);
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl MerkleImpl of IMerkleManager<ContractState> {
+        fn get_root_hash(self: @ContractState) -> felt252 {
+            let mmr = self.mmr.read();
+            mmr.root
+        }
+
+        fn get_element_count(self: @ContractState) -> felt252 {
+            let mmr = self.mmr.read();
+            mmr.last_pos.into()
+        }
+
+        fn get_commitment_index(self: @ContractState, commitment_hash: felt252) -> felt252 {
+            let index = self.commitment_hash_to_index.read(commitment_hash);
+            assert(index != 0, 'Commitment not found');
+            index
+        }
+
+        fn get_last_peaks(self: @ContractState) -> Array<felt252> {
+            let mut peaks = array![];
+            for i in 0..self.last_peaks.len() {
+                peaks.append(self.last_peaks.at(i).read());
+            };
+            peaks
+        }
+
+        fn get_leaves_count(self: @ContractState) -> felt252 {
+            self.leaves_count.read()
+        }
+
+        fn verify_proof(
+            self: @ContractState,
+            index: usize,
+            commitment_hash: felt252,
+            peaks: Array<felt252>,
+            proof: Array<felt252>,
+        ) -> Result<bool, felt252> {
+            let mmr = self.mmr.read();
+            mmr.verify_proof(index, commitment_hash, peaks.span(), proof.span())
+        }
+    }
+
+    #[generate_trait]
+    impl InternalFunctions of InternalFunctionsTrait {
+        fn append_withdrawal_hash(ref self: ContractState, commitment_hash: felt252) {
+            let mut mmr = self.mmr.read();
+            let last_peaks = self.get_last_peaks().span();
+            let mut leaves_count = self.leaves_count.read();
+
+            match mmr.append(commitment_hash, last_peaks) {
+                Result::Ok((
+                    root_hash, peaks,
+                )) => {
+                    self.node_index_to_root.write(mmr.last_pos, root_hash);
+                    leaves_count += 1;
+
+                    self.commitment_hash_to_index.write(commitment_hash, mmr.last_pos.into());
+                    self.leaves_count.write(leaves_count);
+
+                    let last_peaks_len = last_peaks.len();
+                    let peaks_len = peaks.len();
+
+                    if last_peaks_len > peaks_len {
+                        // Overwrite up to peaks_len, then set the rest to 0
+                        for i in 0..peaks_len {
+                            let mut storage_ptr = self.last_peaks.at(i.into());
+                            storage_ptr.write(*peaks.at(i));
+                        };
+                        for i in peaks_len..last_peaks_len {
+                            let mut storage_ptr = self.last_peaks.at(i.into());
+                            storage_ptr.write(0);
+                        };
+                    } else {
+                        // Overwrite up to last_peaks_len, then append the rest
+                        for i in 0..last_peaks_len {
+                            let mut storage_ptr = self.last_peaks.at(i.into());
+                            storage_ptr.write(*peaks.at(i));
+                        };
+                        for i in last_peaks_len..peaks_len {
+                            self.last_peaks.append().write(*peaks.at(i));
+                        };
+                    }
+
+                    self
+                        .emit(
+                            Event::WithdrawalHashAppended(
+                                WithdrawalHashAppended {
+                                    index: mmr.last_pos.into(),
+                                    commitment_hash: commitment_hash,
+                                    root_hash: mmr.root,
+                                },
+                            ),
+                        );
+
+                    self.mmr.write(mmr);
+                },
+                Result::Err(err) => { panic(array![err]) },
+            }
         }
     }
 }

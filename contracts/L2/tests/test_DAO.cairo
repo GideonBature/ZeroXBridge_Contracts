@@ -6,7 +6,7 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 use l2::dao::DAO::{IDAODispatcher, IDAODispatcherTrait, ProposalStatus, DAO};
-use l2::core::xZBERC20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
+use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
 
 const DEFAULT_BINDING_THRESHOLD: u256 = 1_000_000;
 
