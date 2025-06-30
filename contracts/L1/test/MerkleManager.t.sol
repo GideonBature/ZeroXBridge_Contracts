@@ -83,24 +83,28 @@ contract MerkleManagerTest is Test {
     /// @notice Test that verifies correct MMR indices are stored for commitments
     function testCorrectMMRIndicesStored() public {
         // Expected MMR indices for first 6 leaves according to MMR structure
-        // Leaf 0 -> MMR index 0
-        // Leaf 1 -> MMR index 1
-        // Leaf 2 -> MMR index 3 (index 2 is internal node)
-        // Leaf 3 -> MMR index 4
-        // Leaf 4 -> MMR index 7 (indices 5,6 are internal nodes)
-        // Leaf 5 -> MMR index 8
-        uint256[] memory expectedIndices = new uint256[](6);
-        expectedIndices[0] = 0;
-        expectedIndices[1] = 1;
-        expectedIndices[2] = 3;
-        expectedIndices[3] = 4;
-        expectedIndices[4] = 7;
-        expectedIndices[5] = 8;
+        // Leaf 0 -> MMR index 1
+        // Leaf 1 -> MMR index 2
+        // Leaf 2 -> MMR index 4 (index 3 is internal node)
+        // Leaf 3 -> MMR index 5
+        // Leaf 4 -> MMR index 8 (indices 6,7 are internal nodes)
+        // Leaf 5 -> MMR index 9
+        uint256[] memory expectedIndices = new uint256[](10);
+        expectedIndices[0] = 1;
+        expectedIndices[1] = 2;
+        expectedIndices[2] = 4;
+        expectedIndices[3] = 5;
+        expectedIndices[4] = 8;
+        expectedIndices[5] = 9;
+        expectedIndices[6] = 11;
+        expectedIndices[7] = 12;
+        expectedIndices[8] = 16;
+        expectedIndices[9] = 17;
 
-        bytes32[] memory commitments = new bytes32[](6);
+        bytes32[] memory commitments = new bytes32[](10);
 
         // Add leaves one by one and verify stored indices
-        for (uint256 i = 0; i < 6; i++) {
+        for (uint256 i = 0; i < 10; i++) {
             commitments[i] = keccak256(abi.encode("commitment", i));
             merkleManager.appendDepositHashPublic(commitments[i]);
 
@@ -121,10 +125,10 @@ contract MerkleManagerTest is Test {
 
         // Expected indices for batch: 0, 1, 3, 4
         uint256[] memory expectedBatchIndices = new uint256[](4);
-        expectedBatchIndices[0] = 0;
-        expectedBatchIndices[1] = 1;
-        expectedBatchIndices[2] = 3;
-        expectedBatchIndices[3] = 4;
+        expectedBatchIndices[0] = 1;
+        expectedBatchIndices[1] = 2;
+        expectedBatchIndices[2] = 4;
+        expectedBatchIndices[3] = 5;
 
         merkleManager.multiAppendDepositHashPublic(batchCommitments);
 
@@ -136,15 +140,13 @@ contract MerkleManagerTest is Test {
         }
     }
 
-    /// @notice Test edge case: first leaf gets index 0
+    /// @notice Test edge case: first leaf gets index 1
     function testFirstLeafIndexZero() public {
         bytes32 firstCommitment = keccak256("first");
         merkleManager.appendDepositHashPublic(firstCommitment);
 
         uint256 index = merkleManager.getCommitmentIndex(firstCommitment);
-        assertEq(index, 0, "First leaf must have index 0");
-
-        console.log("First leaf correctly assigned index 0");
+        assertEq(index, 1, "First leaf must have index 1");
     }
 
     /// @notice Test mixed sequential and batch appends maintain correct indices
@@ -161,22 +163,22 @@ contract MerkleManagerTest is Test {
         batch[1] = keccak256("batch2");
         merkleManager.multiAppendDepositHashPublic(batch);
 
-        // Verify indices: 0, 1, 3, 4
-        assertEq(merkleManager.getCommitmentIndex(seq1), 0, "seq1 wrong index");
-        assertEq(merkleManager.getCommitmentIndex(seq2), 1, "seq2 wrong index");
-        assertEq(merkleManager.getCommitmentIndex(batch[0]), 3, "batch1 wrong index");
-        assertEq(merkleManager.getCommitmentIndex(batch[1]), 4, "batch2 wrong index");
+        // Verify indices: 1, 2, 4, 5
+        assertEq(merkleManager.getCommitmentIndex(seq1), 1, "seq1 wrong index");
+        assertEq(merkleManager.getCommitmentIndex(seq2), 2, "seq2 wrong index");
+        assertEq(merkleManager.getCommitmentIndex(batch[0]), 4, "batch1 wrong index");
+        assertEq(merkleManager.getCommitmentIndex(batch[1]), 5, "batch2 wrong index");
 
         console.log(" Mixed append maintains correct MMR indices");
     }
 
-    /// @notice Test that uncommitted hashes return index 0 (default)
+    /// @notice Test that uncommitted hashes return index 1 (default)
     function testUncommittedHashReturnsZero() public {
         bytes32 nonExistentHash = keccak256("doesnotexist");
         uint256 index = merkleManager.getCommitmentIndex(nonExistentHash);
         assertEq(index, 0, "Non-existent hash should return 0");
 
-        // Add one commitment to make sure index 0 is now taken
+        // Add one commitment to make sure index 1 is now taken
         bytes32 realCommitment = keccak256("real");
         merkleManager.appendDepositHashPublic(realCommitment);
 
@@ -184,7 +186,7 @@ contract MerkleManagerTest is Test {
         uint256 stillZero = merkleManager.getCommitmentIndex(nonExistentHash);
         assertEq(stillZero, 0, "Non-existent hash still returns 0 after commits");
 
-        console.log(" Note: Non-existent hashes return 0, same as first valid commitment");
+        // console.log(" Note: Non-existent hashes return 0, same as first valid commitment");
     }
 
     /// @notice Logs the current peaks of the Merkle tree

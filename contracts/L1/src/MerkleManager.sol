@@ -57,7 +57,7 @@ contract MerkleManager {
 
         // Map commitment hash to its correct MMR leaf index
         uint256 mmrLeafIndex = leafCountToMmrIndex(leavesCount);
-        commitmentHashToIndex[commitmentHash] = mmrLeafIndex;
+        commitmentHashToIndex[commitmentHash] = mmrLeafIndex + 1; // +1 to make it 1-based index
         leavesCount += 1;
 
         // Emit event for the appended deposit
@@ -83,7 +83,7 @@ contract MerkleManager {
             uint256 mmrLeafIndex = leafCountToMmrIndex(leavesCount);
 
             // Map commitment hash to its correct MMR leaf index
-            commitmentHashToIndex[commitmentHashes[i]] = mmrLeafIndex;
+            commitmentHashToIndex[commitmentHashes[i]] = mmrLeafIndex + 1; // +1 to make it 1-based index
 
             leavesCount += 1;
 
