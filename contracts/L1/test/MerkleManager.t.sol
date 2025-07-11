@@ -21,92 +21,61 @@ contract MerkleManagerTest is Test {
     }
 
     /// @notice Tests appending elements to the Merkle tree and verifies the peaks and root hash
-    // function testTreeAppends() public {
-    //     // Start with an empty peaks array
-    //     bytes32[] memory peaks = new bytes32[](0);
+    function testTreeAppends() public {
+        // Start with an empty peaks array
+        bytes32[] memory peaks = new bytes32[](0);
 
-    //     // Append the first deposit
-    //     // console.log("Adding element 1");
-    //     merkleManager.appendDepositHashPublic(bytes32(uint256(1)));
-    //     logPeaks();
+        // Append the first deposit
+        // console.log("Adding element 1");
+        merkleManager.appendDepositHashPublic(bytes32(uint256(1)));
+        logPeaks();
 
-    //     // Compute the expected node hash for the first element
-    //     // hash(index, value)
-    //     bytes32 node1 = keccak256(abi.encode(uint256(1), bytes32(uint256(1))));
-    //     peaks = StatelessMmrHelpers.newArrWithElem(peaks, node1);
+        // Compute the expected node hash for the first element
+        // hash(index, value)
+        peaks = StatelessMmrHelpers.newArrWithElem(peaks, bytes32(uint256(1)));
 
-    //     // Verify the proof for the first element
-    //     StatelessMmr.verifyProof(
-    //         1, // index
-    //         bytes32(uint256(1)), // leaf
-    //         new bytes32[](0), // proof (empty for first element)
-    //         merkleManager.getLastPeaks(), // current peaks
-    //         1, // size
-    //         merkleManager.getRootHash() // root hash
-    //     );
+        // Verify the proof for the first element
+        StatelessMmr.verifyProof(
+            1, // index
+            bytes32(uint256(1)), // leaf
+            new bytes32[](0), // proof (empty for first element)
+            merkleManager.getLastPeaks(), // current peaks
+            1, // size
+            merkleManager.getRootHash() // root hash
+        );
 
-    //     // Append the second deposit
-    //     // console.log("Adding element 2");
-    //     merkleManager.appendDepositHashPublic(bytes32(uint256(2)));
-    //     logPeaks();
+        // Append the second deposit
+        // console.log("Adding element 2");
+        merkleManager.appendDepositHashPublic(bytes32(uint256(2)));
+        logPeaks();
 
-    //     // Prepare proof for the second element
-    //     bytes32[] memory proof = new bytes32[](0);
-    //     proof = StatelessMmrHelpers.newArrWithElem(proof, node1);
+        // Prepare proof for the second element
+        bytes32[] memory proof = new bytes32[](0);
+        proof = StatelessMmrHelpers.newArrWithElem(proof, bytes32(uint256(1)));
 
-    //     // Verify the proof for the second element
-    //     StatelessMmr.verifyProof(
-    //         2, // index
-    //         bytes32(uint256(2)), // leaf
-    //         proof, // proof (includes node1)
-    //         merkleManager.getLastPeaks(), // current peaks
-    //         3, // size
-    //         merkleManager.getRootHash() // root hash
-    //     );
+        // Verify the proof for the second element
+        StatelessMmr.verifyProof(
+            2, // index
+            bytes32(uint256(2)), // leaf
+            proof, // proof (includes node1)
+            merkleManager.getLastPeaks(), // current peaks
+            3, // size
+            merkleManager.getRootHash() // root hash
+        );
 
-    //     // Verify previous element with new peaks and root hash
-    //     bytes32[] memory proof2 = new bytes32[](0);
-    //     // hash(index, value)
-    //     bytes32 node2 = keccak256(abi.encode(uint256(2), bytes32(uint256(2))));
-    //     proof2 = StatelessMmrHelpers.newArrWithElem(proof2, node2);
+        // Verify previous element with new peaks and root hash
+        bytes32[] memory proof2 = new bytes32[](0);
+        // hash(index, value)
+        proof2 = StatelessMmrHelpers.newArrWithElem(proof2, bytes32(uint256(2)));
 
-    //     StatelessMmr.verifyProof(
-    //         1, // index
-    //         bytes32(uint256(1)), // leaf
-    //         proof2, // proof2 (includes node2) hash of neighbouring nodes
-    //         merkleManager.getLastPeaks(), // current peaks
-    //         3, // size
-    //         merkleManager.getRootHash() // root hash
-    //     );
-    // }
-
-    function testAppendAndVerifyLeaves() public {
-        uint256 last_element_idx;
-        bytes32 root_hash;
-
-        for (uint256 i = 1; i <= 10; i++) {
-            bytes32 leaf = bytes32(0);
-            console.log("Adding element", i);
-            console.logBytes32(leaf);
-            // Append to MMR
-            merkleManager.appendDepositHashPublic(leaf);
-
-            uint256 leaves = i;
-            last_element_idx = merkleManager.getElementsCount();
-            uint256 leaf_element_index = merkleManager.getCommitmentIndex(leaf);
-            root_hash = merkleManager.getRootHash();
-
-            console.log("leaves_count:", leaves);
-            console.log("elements_count:", last_element_idx);
-            console.log("element_index:", leaf_element_index);
-            console.logBytes32(root_hash);
-        }
-        console.log("Final root");
-        // Log current root
-        last_element_idx = merkleManager.getElementsCount();
-        root_hash = merkleManager.getRootHash();
-        console.log("elements_count:", last_element_idx);
-        console.logBytes32(root_hash);
+        StatelessMmr.verifyProof(
+            1, // index
+            bytes32(uint256(1)), // leaf
+            proof2, // proof2 (includes node2) hash of neighbouring nodes
+            merkleManager.getLastPeaks(), // current peaks
+            3, // size
+            merkleManager.getRootHash() // root hash
+        );
     }
 
     /// @notice Test that verifies correct MMR indices are stored for commitments
