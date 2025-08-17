@@ -12,7 +12,7 @@ openzeppelin_access = "0.20.0"
 openzeppelin_introspection = "0.20.0"
 openzeppelin_token = "0.20.0"
 openzeppelin_upgrades = "0.20.0"
-cairo_lib = { git = "https://github.com/HerodotusDev/cairo-lib.git" }
+cairo_lib = { git = "https://github.com/Explore-Beyond-Innovations/cairo-lib.git", rev = "afc30b93404f6f5c595f97d1f4f795983872600a" }
 
 [dev-dependencies]
 assert_macros = "2.9.2"
@@ -21,7 +21,7 @@ snforge_std = "0.36.0"
 
 [[target.starknet-contract]]
 sierra = true
-casm=true
+casm = true
 
 [scripts]
 test = "snforge test"
