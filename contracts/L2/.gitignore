@@ -3,3 +3,4 @@ target
 .tool-versions
 node_modules
 .env
+Scarb.lock

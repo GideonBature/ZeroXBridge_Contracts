@@ -4,7 +4,7 @@ version = 1
 [[package]]
 name = "cairo_lib"
 version = "0.2.0"
-source = "git+https://github.com/HerodotusDev/cairo-lib.git#a0c0ee4feeb4edb61e7a35d29595ad8647c3d469"
+source = "git+https://github.com/Explore-Beyond-Innovations/cairo-lib.git?rev=afc30b93404f6f5c595f97d1f4f795983872600a#afc30b93404f6f5c595f97d1f4f795983872600a"
 
 [[package]]
 name = "integrity"
@@ -77,15 +77,15 @@ checksum = "sha256:44f32d242af1e43982decc49c563e613a9b67ade552f5c3d5cde504e92f74
 
 [[package]]
 name = "snforge_scarb_plugin"
-version = "0.36.0"
+version = "0.48.1"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:b9550f5c921502be3e240e83aa9e2dc6ee63ae76bfecee082b7a15bead0460c0"
+checksum = "sha256:2dd27e8215eea8785b3930e9f452e11b429ca262b1c1fbb071bfc173b9ebc125"
 
 [[package]]
 name = "snforge_std"
-version = "0.36.0"
+version = "0.48.1"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:9f38c6c376447cfe225c5869905122f6a64bc301f5872c7855d2abe6e9c0a1da"
+checksum = "sha256:89f759fa685d48ed0ba7152d2ac2eb168da08dfa8b84b2bee96e203dc5b2413e"
 dependencies = [
  "snforge_scarb_plugin",
 ]

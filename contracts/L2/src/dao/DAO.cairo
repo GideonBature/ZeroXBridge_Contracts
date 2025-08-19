@@ -1,5 +1,4 @@
-use core::starknet::ContractAddress;
-use starknet::storage::Map;
+use starknet::{ContractAddress, storage::Map};
 
 // Define the ExecutiveAction interface
 #[starknet::interface]
@@ -111,12 +110,13 @@ pub mod DAO {
     use starknet::event::EventEmitter;
     use starknet::storage::StorageMapWriteAccess;
     use starknet::storage::StorageMapReadAccess;
+    #[feature("deprecated-starknet-consts")]
     use starknet::{ContractAddress, contract_address_const};
     use starknet::get_caller_address;
     use starknet::get_block_timestamp;
     use core::traits::Into;
     use core::array::ArrayTrait;
-    use core::starknet::storage::{
+    use starknet::storage::{
         StoragePointerReadAccess, StoragePointerWriteAccess, Map, StoragePathEntry,
     };
     use super::{Proposal, ProposalStatus, ProposalBindingData, BindingVote, BindingVoteTrait};

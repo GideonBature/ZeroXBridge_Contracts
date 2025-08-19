@@ -132,7 +132,7 @@ mod Timelock {
             while i < calldata_length {
                 // If indexing returns a pointer (@u256), use .read() to obtain the value.
                 let element: u256 = *calldata.at(i);
-                action_entry.calldata.append().write(element);
+                action_entry.calldata.push(element);
                 i = i + 1;
             };
 

@@ -462,7 +462,7 @@ pub mod ZeroXBridgeL2 {
                             storage_ptr.write(*peaks.at(i));
                         };
                         for i in last_peaks_len..peaks_len {
-                            self.last_peaks.append().write(*peaks.at(i));
+                            self.last_peaks.push(*peaks.at(i));
                         };
                     }
 

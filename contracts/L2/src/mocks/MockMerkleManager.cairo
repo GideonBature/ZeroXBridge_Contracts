@@ -95,7 +95,7 @@ pub mod MockMerkleManager {
                             storage_ptr.write(*peaks.at(i));
                         };
                         for i in prev_peaks_len..peaks_len {
-                            self.last_peaks.append().write(*peaks.at(i));
+                            self.last_peaks.push(*peaks.at(i));
                         };
                     }
 

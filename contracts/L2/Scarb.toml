@@ -7,7 +7,7 @@ edition = "2024_07"
 
 [dependencies]
 integrity = "2.0.0"
-starknet = "2.9.2"
+starknet = "2.12.0"
 openzeppelin_access = "0.20.0"
 openzeppelin_introspection = "0.20.0"
 openzeppelin_token = "0.20.0"
@@ -15,9 +15,9 @@ openzeppelin_upgrades = "0.20.0"
 cairo_lib = { git = "https://github.com/Explore-Beyond-Innovations/cairo-lib.git", rev = "afc30b93404f6f5c595f97d1f4f795983872600a" }
 
 [dev-dependencies]
-assert_macros = "2.9.2"
+assert_macros = "2.12.0"
 openzeppelin_utils = "0.20.0"
-snforge_std = "0.36.0"
+snforge_std = "0.48.0"
 
 [[target.starknet-contract]]
 sierra = true
