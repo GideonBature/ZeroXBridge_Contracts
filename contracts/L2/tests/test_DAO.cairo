@@ -1,12 +1,12 @@
-use openzeppelin_utils::serde::SerializedAppend;
+use l2::dao::DAO::{DAO, IDAODispatcher, IDAODispatcherTrait, ProposalStatus};
+use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
 use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+use openzeppelin_utils::serde::SerializedAppend;
 use snforge_std::{
-    DeclareResultTrait, cheat_caller_address, cheat_block_timestamp, declare, CheatSpan,
-    ContractClassTrait, EventSpyAssertionsTrait, spy_events,
+    CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
+    cheat_block_timestamp, cheat_caller_address, declare, spy_events,
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
-use l2::dao::DAO::{IDAODispatcher, IDAODispatcherTrait, ProposalStatus, DAO};
-use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
 
 const DEFAULT_BINDING_THRESHOLD: u256 = 1_000_000;
 

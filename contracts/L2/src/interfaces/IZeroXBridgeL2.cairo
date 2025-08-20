@@ -1,5 +1,5 @@
-use starknet::ContractAddress;
 use core::option::Option;
+use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IZeroXBridgeL2<TContractState> {

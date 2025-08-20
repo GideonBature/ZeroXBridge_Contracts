@@ -1,4 +1,4 @@
-use core::starknet::ContractAddress;
+use starknet::ContractAddress;
 use starknet::storage::Map;
 
 // Define the ExecutiveAction interface
@@ -108,20 +108,19 @@ pub trait IDAO<TContractState> {
 
 #[starknet::contract]
 pub mod DAO {
-    use starknet::event::EventEmitter;
-    use starknet::storage::StorageMapWriteAccess;
-    use starknet::storage::StorageMapReadAccess;
-    use starknet::{ContractAddress, contract_address_const};
-    use starknet::get_caller_address;
-    use starknet::get_block_timestamp;
-    use core::traits::Into;
     use core::array::ArrayTrait;
-    use core::starknet::storage::{
-        StoragePointerReadAccess, StoragePointerWriteAccess, Map, StoragePathEntry,
-    };
-    use super::{Proposal, ProposalStatus, ProposalBindingData, BindingVote, BindingVoteTrait};
-    use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use core::panic_with_felt252;
+    use core::traits::Into;
+    use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use starknet::event::EventEmitter;
+    use starknet::storage::{
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
+        StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
+    #[feature("deprecated-starknet-consts")]
+    use starknet::{ContractAddress, contract_address_const};
+    use starknet::{get_block_timestamp, get_caller_address};
+    use super::{BindingVote, BindingVoteTrait, Proposal, ProposalBindingData, ProposalStatus};
 
 
     #[storage]

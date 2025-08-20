@@ -1,7 +1,7 @@
-use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
-use starknet::{ContractAddress};
-use l2::mocks::MockMerkleManager::{IMockMerkleManagerDispatcher, IMockMerkleManagerDispatcherTrait};
 use cairo_lib::hashing::poseidon::PoseidonHasher;
+use l2::mocks::MockMerkleManager::{IMockMerkleManagerDispatcher, IMockMerkleManagerDispatcherTrait};
+use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
+use starknet::ContractAddress;
 
 // Helper functions
 fn deploy_merkle_manager() -> ContractAddress {

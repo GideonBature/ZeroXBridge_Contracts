@@ -6,16 +6,14 @@ pub const UPGRADER_ROLE: felt252 = selector!("UPGRADER_ROLE");
 
 #[starknet::contract]
 pub mod xZBERC20 {
+    use l2::interfaces::IxZBErc20::IXZBERC20;
     use openzeppelin_access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin_token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     use openzeppelin_upgrades::UpgradeableComponent;
     use openzeppelin_upgrades::interface::IUpgradeable;
-    use starknet::{ClassHash, ContractAddress, get_caller_address};
-
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-
-    use l2::interfaces::IxZBErc20::IXZBERC20;
+    use starknet::{ClassHash, ContractAddress, get_caller_address};
     use super::{BRIDGE_ROLE, UPGRADER_ROLE};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);

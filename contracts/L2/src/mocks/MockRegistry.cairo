@@ -5,12 +5,12 @@ pub trait IMockRegistry<TContractState> {
 
 #[starknet::contract]
 mod MockProofRegistry {
-    use super::*;
-    use starknet::storage::{
-        Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
-    };
-    use l2::interfaces::IProofRegistry::IProofRegistry;
     use integrity::{Integrity, IntegrityWithConfig};
+    use l2::interfaces::IProofRegistry::IProofRegistry;
+    use starknet::storage::{
+        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
+    use super::*;
 
     #[storage]
     struct Storage {

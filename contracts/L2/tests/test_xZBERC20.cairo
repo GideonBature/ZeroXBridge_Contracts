@@ -1,6 +1,5 @@
 use l2::core::xZBERC20::BRIDGE_ROLE;
 use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
-
 use openzeppelin_access::accesscontrol::interface::{
     IAccessControlDispatcher, IAccessControlDispatcherTrait,
 };
