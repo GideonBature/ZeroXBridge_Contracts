@@ -1,14 +1,11 @@
-use starknet::ContractAddress;
-use starknet::get_block_timestamp;
-use starknet::get_caller_address;
-use starknet::storage::{
-    StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Vec, Map,
-};
-use core::array::{ArrayTrait};
-use core::poseidon::PoseidonTrait;
-use core::poseidon::poseidon_hash_span;
-use core::hash::{HashStateTrait};
+use core::array::ArrayTrait;
+use core::hash::HashStateTrait;
 use core::integer::u256;
+use core::poseidon::{PoseidonTrait, poseidon_hash_span};
+use starknet::storage::{
+    Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
+};
+use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
 
 #[starknet::interface]
 trait IExecutor<TContractState> {
@@ -29,9 +26,9 @@ trait ITimelock<TContractState> {
 
 #[starknet::contract]
 mod Timelock {
-    use super::*;
     use core::traits::Into;
-    use starknet::storage::{MutableVecTrait};
+    use starknet::storage::MutableVecTrait;
+    use super::*;
 
     #[storage]
     struct Storage {
@@ -90,9 +87,9 @@ mod Timelock {
     #[derive(Drop, Serde, Copy, PartialEq, starknet::Store)]
     #[allow(starknet::store_no_default_variant)]
     enum ActionStatus {
-        Pending: (),
-        Executed: (),
-        Canceled: (),
+        Pending,
+        Executed,
+        Canceled,
     }
 
     #[constructor]
@@ -134,7 +131,7 @@ mod Timelock {
                 let element: u256 = *calldata.at(i);
                 action_entry.calldata.push(element);
                 i = i + 1;
-            };
+            }
 
             self.action_count.write(self.action_count.read() + 1);
 
@@ -175,7 +172,7 @@ mod Timelock {
                 let element = action_entry.calldata.at(j).read();
                 calldata_array.append(element);
                 j = j + 1;
-            };
+            }
 
             let executor_contract = IExecutorDispatcher { contract_address: executor };
             executor_contract.execute(calldata_array);
@@ -221,7 +218,7 @@ mod Timelock {
                 if action_entry.status.read() == ActionStatus::Pending {
                     pending.append(action_id);
                 }
-            };
+            }
             pending
         }
     }
@@ -243,7 +240,7 @@ mod Timelock {
                     .u256_to_felt252(element); // Convert u256 to felt252.
                 calldata_felt.append(element_felt);
                 i = i + 1;
-            };
+            }
 
             // Generate the action ID using Poseidon hash.
             PoseidonTrait::new()

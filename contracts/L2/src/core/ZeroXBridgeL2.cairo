@@ -1,34 +1,30 @@
 #[starknet::contract]
 pub mod ZeroXBridgeL2 {
-    use openzeppelin_access::ownable::OwnableComponent;
-    use openzeppelin_introspection::src5::SRC5Component;
-    use openzeppelin_upgrades::UpgradeableComponent;
-    use openzeppelin_upgrades::interface::IUpgradeable;
-    use starknet::{
-        ContractAddress, get_caller_address, ClassHash, get_block_timestamp, get_contract_address,
-    };
-    use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
-    use openzeppelin_token::erc20::interface::{IERC20DispatcherTrait, IERC20Dispatcher};
-    use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
-
+    use cairo_lib::data_structures::mmr::mmr::{MMR, MMRTrait};
+    use core::array::ArrayTrait;
+    use core::hash::{HashStateExTrait, HashStateTrait};
     use core::option::Option;
     use core::poseidon::PoseidonTrait;
-    use core::array::ArrayTrait;
-    use starknet::storage::{
-        StoragePointerReadAccess, StoragePointerWriteAccess, Map, StorageMapReadAccess,
-        StorageMapWriteAccess, Vec, VecTrait, MutableVecTrait,
-    };
-    use core::hash::{HashStateTrait, HashStateExTrait};
-
+    use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+    use l2::interfaces::IMerkleManager::IMerkleManager;
     use l2::interfaces::IProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
     use l2::interfaces::IZeroXBridgeL2::{IDynamicRate, IZeroXBridgeL2};
-    use l2::interfaces::IMerkleManager::IMerkleManager;
-
+    use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
+    use openzeppelin_access::ownable::OwnableComponent;
+    use openzeppelin_introspection::src5::SRC5Component;
+    use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin_upgrades::UpgradeableComponent;
+    use openzeppelin_upgrades::interface::IUpgradeable;
     use starknet::eth_address::EthAddress;
     use starknet::eth_signature::verify_eth_signature;
     use starknet::secp256_trait::Signature;
-    use cairo_lib::data_structures::mmr::mmr::MMR;
-    use cairo_lib::data_structures::mmr::mmr::MMRTrait;
+    use starknet::storage::{
+        Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess, Vec, VecTrait,
+    };
+    use starknet::{
+        ClassHash, ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
+    };
 
 
     const PRECISION: u256 = 1_000_000_000_000_000_000; // 18 decimals for precision
@@ -313,7 +309,7 @@ pub mod ZeroXBridgeL2 {
             let max_rate = rates.max_rate;
 
             let final_rate = if raw_rate == 0 {
-                1 * PRECISION
+                PRECISION
             } else if raw_rate < min_rate {
                 min_rate
             } else if raw_rate > max_rate {
@@ -339,16 +335,16 @@ pub mod ZeroXBridgeL2 {
             self.ownable.assert_only_owner();
             let mut current_rates = self.rates.read();
 
-            match min_rate {
-                Option::Some(new_min) => { current_rates.min_rate = new_min; },
-                Option::None => {},
+            if let Option::Some(new_min) = min_rate {
+                {
+                    current_rates.min_rate = new_min;
+                }
             }
-
-            match max_rate {
-                Option::Some(new_max) => { current_rates.max_rate = new_max; },
-                Option::None => {},
+            if let Option::Some(new_max) = max_rate {
+                {
+                    current_rates.max_rate = new_max;
+                }
             }
-
             assert(current_rates.min_rate < current_rates.max_rate, 'Min rate must be < max rate');
 
             self.rates.write(current_rates);
@@ -405,7 +401,7 @@ pub mod ZeroXBridgeL2 {
             let mut peaks = array![];
             for i in 0..self.last_peaks.len() {
                 peaks.append(self.last_peaks.at(i).read());
-            };
+            }
             peaks
         }
 
@@ -450,7 +446,7 @@ pub mod ZeroXBridgeL2 {
                         for i in 0..peaks_len {
                             let mut storage_ptr = self.last_peaks.at(i.into());
                             storage_ptr.write(*peaks.at(i));
-                        };
+                        }
                         for i in peaks_len..last_peaks_len {
                             let mut storage_ptr = self.last_peaks.at(i.into());
                             storage_ptr.write(0);
@@ -460,7 +456,7 @@ pub mod ZeroXBridgeL2 {
                         for i in 0..last_peaks_len {
                             let mut storage_ptr = self.last_peaks.at(i.into());
                             storage_ptr.write(*peaks.at(i));
-                        };
+                        }
                         for i in last_peaks_len..peaks_len {
                             self.last_peaks.push(*peaks.at(i));
                         };
