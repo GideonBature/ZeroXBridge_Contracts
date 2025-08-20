@@ -1,23 +1,22 @@
-use snforge_std::{
-    declare, spy_events, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, CheatSpan,
-    cheat_caller_address,
-};
-
-use l2::interfaces::IZeroXBridgeL2::{
-    IZeroXBridgeL2Dispatcher, IZeroXBridgeL2DispatcherTrait, IDynamicRateDispatcher,
-    IDynamicRateDispatcherTrait,
-};
-use l2::core::ZeroXBridgeL2::ZeroXBridgeL2::{Event, BurnEvent, BurnData, MintEvent, MintData};
-use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
-use l2::interfaces::IProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
-use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
-use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTrait};
-use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
+use core::hash::{HashStateExTrait, HashStateTrait};
 use core::integer::u256;
 use core::poseidon::PoseidonTrait;
-use core::hash::{HashStateTrait, HashStateExTrait};
+use l2::core::ZeroXBridgeL2::ZeroXBridgeL2::{BurnData, BurnEvent, Event, MintData, MintEvent};
+use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+use l2::interfaces::IProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
+use l2::interfaces::IZeroXBridgeL2::{
+    IDynamicRateDispatcher, IDynamicRateDispatcherTrait, IZeroXBridgeL2Dispatcher,
+    IZeroXBridgeL2DispatcherTrait,
+};
+use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
+use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTrait};
+use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use openzeppelin_utils::serde::SerializedAppend;
+use snforge_std::{
+    CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
+    cheat_caller_address, declare, spy_events,
+};
+use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 
 const MIN_RATE: u256 = 100_000_000_000_000_000; // 0.1 (with PRECISION)
 const MAX_RATE: u256 = 5_000_000_000_000_000_000; // 5.0 (with PRECISION)

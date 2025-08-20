@@ -1,5 +1,5 @@
 use integrity::{
-    calculate_bootloaded_fact_hash, SHARP_BOOTLOADER_PROGRAM_HASH, VerifierConfiguration,
+    SHARP_BOOTLOADER_PROGRAM_HASH, VerifierConfiguration, calculate_bootloaded_fact_hash,
 };
 
 // Calculate fact hash for cairo1 programs bootloaded in cairo0 by Atlantic.
@@ -16,11 +16,11 @@ fn calculate_cairo1_fact_hash(
     bootloader_output.append(output.len().into());
     for x in output {
         bootloader_output.append(*x);
-    };
+    }
     bootloader_output.append(input.len().into());
     for x in input {
         bootloader_output.append(*x);
-    };
+    }
 
     // All programs sent to Sharp are bootloaded (second time in this case).
     calculate_bootloaded_fact_hash(
@@ -58,12 +58,12 @@ fn get_cairo1_fact_hash(commitment_hash: felt252, merkle_root: felt252) -> felt2
 
 #[starknet::contract]
 mod ProofRegistry {
-    use super::*;
-    use starknet::storage::{
-        Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
-    };
     use integrity::{Integrity, IntegrityWithConfig};
     use l2::interfaces::IProofRegistry::IProofRegistry;
+    use starknet::storage::{
+        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
+    use super::*;
 
     #[storage]
     struct Storage {

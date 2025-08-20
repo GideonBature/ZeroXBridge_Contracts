@@ -1,12 +1,12 @@
 #[starknet::contract]
 pub mod MockL2Oracle {
-    use starknet::{ContractAddress, get_caller_address};
     use core::num::traits::Zero;
+    use l2::interfaces::IL2Oracle::IL2Oracle;
     use openzeppelin_access::ownable::OwnableComponent;
     use starknet::storage::{
-        StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry, Map,
+        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
     };
-    use l2::interfaces::IL2Oracle::IL2Oracle;
+    use starknet::{ContractAddress, get_caller_address};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
 

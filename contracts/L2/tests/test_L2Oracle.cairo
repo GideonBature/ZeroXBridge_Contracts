@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tests {
     use core::traits::Into;
-    use starknet::{ContractAddress, contract_address_const};
-    use snforge_std::{
-        declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
-        stop_cheat_caller_address, EventSpyAssertionsTrait, spy_events,
-    };
-    use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
     use l2::core::L2Oracle::L2Oracle;
+    use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+    use snforge_std::{
+        ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
+        start_cheat_caller_address, stop_cheat_caller_address,
+    };
+    use starknet::{ContractAddress, contract_address_const};
 
     // Helper function to deploy the contract
     fn deploy_contract() -> (ContractAddress, ContractAddress) {

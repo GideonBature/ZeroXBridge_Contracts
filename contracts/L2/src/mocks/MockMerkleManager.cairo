@@ -17,16 +17,13 @@ pub trait IMockMerkleManager<TContractState> {
 
 #[starknet::contract]
 pub mod MockMerkleManager {
+    use cairo_lib::data_structures::mmr::mmr::{MMR, MMRTrait};
     use core::array::ArrayTrait;
     use starknet::storage::{
-        StoragePointerReadAccess, StoragePointerWriteAccess, Map, StorageMapReadAccess,
-        StorageMapWriteAccess, Vec, VecTrait, MutableVecTrait,
+        Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess, Vec, VecTrait,
     };
-
     use super::IMockMerkleManager;
-
-    use cairo_lib::data_structures::mmr::mmr::MMR;
-    use cairo_lib::data_structures::mmr::mmr::MMRTrait;
 
     #[storage]
     struct Storage {
@@ -83,7 +80,7 @@ pub mod MockMerkleManager {
                         for i in 0..peaks_len {
                             let mut storage_ptr = self.last_peaks.at(i.into());
                             storage_ptr.write(*peaks.at(i));
-                        };
+                        }
                         for i in peaks_len..prev_peaks_len {
                             let mut storage_ptr = self.last_peaks.at(i.into());
                             storage_ptr.write(0);
@@ -93,7 +90,7 @@ pub mod MockMerkleManager {
                         for i in 0..prev_peaks_len {
                             let mut storage_ptr = self.last_peaks.at(i.into());
                             storage_ptr.write(*peaks.at(i));
-                        };
+                        }
                         for i in prev_peaks_len..peaks_len {
                             self.last_peaks.push(*peaks.at(i));
                         };
@@ -127,7 +124,7 @@ pub mod MockMerkleManager {
                 if (peak != 0) {
                     peaks.append(peak)
                 }
-            };
+            }
             peaks
         }
 
