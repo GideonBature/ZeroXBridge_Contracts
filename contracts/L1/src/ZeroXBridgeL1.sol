@@ -79,6 +79,7 @@ contract ZeroXBridgeL1 is Ownable, Starknet, MerkleManager {
         address indexed user,
         uint256 nonce,
         uint256 commitmentHash,
+        uint256 leavesCount,
         bytes32 newRoot,
         uint256 elementCount
     );
@@ -240,11 +241,20 @@ contract ZeroXBridgeL1 is Ownable, Starknet, MerkleManager {
             keccak256(abi.encodePacked(depositId, userRecord[user], usdVal, nonce, block.timestamp));
 
         // Append to Merkle tree
-        (bytes32 newRoot, uint256 count, uint256 elementCount) = appendDepositHash(commitmentHash);
+        (bytes32 newRoot, uint256 leavesCount, uint256 elementCount) = appendDepositHash(commitmentHash);
 
         // Emit deposit event
         emit DepositEvent(
-            depositId, tokenAddress, assetType, usdVal, user, nonce, uint256(commitmentHash), newRoot, elementCount
+            depositId,
+            tokenAddress,
+            assetType,
+            usdVal,
+            user,
+            nonce,
+            uint256(commitmentHash),
+            leavesCount,
+            newRoot,
+            elementCount
         );
 
         return uint256(commitmentHash);
@@ -274,7 +284,6 @@ contract ZeroXBridgeL1 is Ownable, Starknet, MerkleManager {
         uint256 timestamp = proofdata[3];
 
         // Verify that commitmentHash matches expected format based on L2 standards
-
         uint256 expectedCommitmentHash =
             uint256(keccak256(abi.encodePacked(starknetPubKey, usd_amount, nonce, timestamp)));
 
@@ -287,9 +296,6 @@ contract ZeroXBridgeL1 is Ownable, Starknet, MerkleManager {
 
         // assert root hasn't been used
         require(!verifiedProofs[verifiedRoot], "ZeroXBridge: Proof has already been used");
-
-        // pass verified root into merkle manager
-        // todo: implement merkle manager
 
         // get user address from starknet pubkey
         address user = starkPubKeyRecord[starknetPubKey];
