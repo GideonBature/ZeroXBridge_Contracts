@@ -64,8 +64,8 @@ pub mod ZeroXBridgeL2 {
         verified_roots: Map<felt252, felt252>,
         burn_nonce: Map<ContractAddress, felt252>,
         rates: Rates,
-        mmr_root: felt252,
-        mmr_last_pos: felt252,
+        // Merkle Manager Storage
+        mmr: MMR,
         node_index_to_root: Map<usize, felt252>,
         commitment_hash_to_index: Map<felt252, felt252>,
         last_peaks: Vec<felt252>,
@@ -171,8 +171,8 @@ pub mod ZeroXBridgeL2 {
         self.oracle_address.write(oracle_address);
         let rates = Rates { min_rate, max_rate };
         self.rates.write(rates);
-        self.mmr_root.write(0);
-        self.mmr_last_pos.write(0);
+        let mmr: MMR = Default::default();
+        self.mmr.write(mmr);
         self.leaves_count.write(0);
     }
 
@@ -383,11 +383,13 @@ pub mod ZeroXBridgeL2 {
     #[abi(embed_v0)]
     impl MerkleImpl of IMerkleManager<ContractState> {
         fn get_root_hash(self: @ContractState) -> felt252 {
-            self.mmr_root.read()
+            let mmr = self.mmr.read();
+            mmr.root
         }
 
         fn get_element_count(self: @ContractState) -> felt252 {
-            self.mmr_last_pos.read()
+            let mmr = self.mmr.read();
+            mmr.last_pos.into()
         }
 
         fn get_commitment_index(self: @ContractState, commitment_hash: felt252) -> felt252 {
@@ -398,8 +400,12 @@ pub mod ZeroXBridgeL2 {
 
         fn get_last_peaks(self: @ContractState) -> Array<felt252> {
             let mut peaks = array![];
-            for i in 0..self.last_peaks.len() {
-                peaks.append(self.last_peaks.at(i).read());
+            let len = self.last_peaks.len();
+            for i in 0..len {
+                let peak = self.last_peaks.at(i).read();
+                if peak != 0 {  // Only include non-zero peaks
+                    peaks.append(peak);
+                }
             }
             peaks
         }
@@ -415,10 +421,7 @@ pub mod ZeroXBridgeL2 {
             peaks: Array<felt252>,
             proof: Array<felt252>,
         ) -> Result<bool, felt252> {
-            let mut mmr: MMR = Default::default();
-            mmr.root = self.mmr_root.read();
-            mmr.last_pos = self.mmr_last_pos.read().try_into().unwrap();
-            
+            let mmr = self.mmr.read();
             MMRTrait::verify_proof(@mmr, index, commitment_hash, peaks.span(), proof.span())
         }
     }
@@ -426,51 +429,26 @@ pub mod ZeroXBridgeL2 {
     #[generate_trait]
     impl InternalFunctions of InternalFunctionsTrait {
         fn append_withdrawal_hash(ref self: ContractState, commitment_hash: felt252) {
-            let mut mmr: MMR = Default::default();
-            mmr.root = self.mmr_root.read();
-            mmr.last_pos = self.mmr_last_pos.read().try_into().unwrap();
-            
+            let mut mmr = self.mmr.read();
             let last_peaks = self.get_last_peaks();
             let mut leaves_count = self.leaves_count.read();
 
             match MMRTrait::append(ref mmr, commitment_hash, last_peaks.span()) {
-                Result::Ok((
-                    root_hash, peaks,
-                )) => {
+                Result::Ok((root_hash, peaks)) => {
                     // Store the new root and last position
-                    self.mmr_root.write(root_hash);
-                    self.mmr_last_pos.write(mmr.last_pos.into());
                     self.node_index_to_root.write(mmr.last_pos, root_hash);
                     
-                    // Calculate the correct MMR leaf index using the helper function
-                    let correct_leaf_index = Self::leaf_count_to_mmr_index(leaves_count);
+                    // Calculate the correct MMR leaf index
+                    let correct_leaf_index = Self::leaf_count_to_mmr_index(leaves_count + 1);
                     self.commitment_hash_to_index.write(commitment_hash, correct_leaf_index);
                     
                     leaves_count += 1;
                     self.leaves_count.write(leaves_count);
 
-                    let last_peaks_len = last_peaks.len();
-                    let peaks_len = peaks.len();
-
-                    if last_peaks_len > peaks_len {
-                        // Overwrite up to peaks_len, then set the rest to 0
-                        for i in 0..peaks_len {
-                            let mut storage_ptr = self.last_peaks.at(i.into());
-                            storage_ptr.write(*peaks.at(i));
-                        }
-                        for i in peaks_len..last_peaks_len {
-                            let mut storage_ptr = self.last_peaks.at(i.into());
-                            storage_ptr.write(0);
-                        };
-                    } else {
-                        // Overwrite up to last_peaks_len, then append the rest
-                        for i in 0..last_peaks_len {
-                            let mut storage_ptr = self.last_peaks.at(i.into());
-                            storage_ptr.write(*peaks.at(i));
-                        }
-                        for i in last_peaks_len..peaks_len {
-                            self.last_peaks.push(*peaks.at(i));
-                        };
+                    // Clear and update peaks storage properly
+                    self.clear_peaks_storage();
+                    for i in 0..peaks.len() {
+                        self.last_peaks.push(*peaks.at(i));
                     }
 
                     self
@@ -483,8 +461,19 @@ pub mod ZeroXBridgeL2 {
                                 },
                             ),
                         );
+
+                    // Write the updated MMR back to storage
+                    self.mmr.write(mmr);
                 },
                 Result::Err(err) => { panic(array![err]) },
+            }
+        }
+
+        fn clear_peaks_storage(ref self: ContractState) {
+            // Clear all existing peaks from storage
+            let current_len = self.last_peaks.len();
+            for _i in 0..current_len {
+                self.last_peaks.pop();
             }
         }
 
@@ -493,16 +482,21 @@ pub mod ZeroXBridgeL2 {
                 return 0;
             }
 
-            // Convert to u64 for arithmetic operations
+            // For MMR, the first leaf is at index 1, second at index 2, etc.
+            // But we need to account for internal nodes
             let mut internal_nodes: u64 = 0;
             let mut temp: u64 = leaf_count.try_into().unwrap();
 
-            while temp > 0 {
-                temp = temp / 2; // Right shift equivalent for division by 2
-                internal_nodes += temp;
-            };
+            // Count internal nodes created by building the MMR
+            let mut level = 1_u64;
+            while level < temp {
+                internal_nodes += temp / (level * 2);
+                level *= 2;
+            }
 
-            leaf_count + internal_nodes.into()
+            // The MMR index is leaf position + internal nodes before it
+            let mmr_index = leaf_count + internal_nodes.into();
+            mmr_index
         }
     }
 }
