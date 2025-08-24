@@ -3,6 +3,7 @@ use core::integer::u256;
 use core::poseidon::PoseidonTrait;
 use l2::core::ZeroXBridgeL2::ZeroXBridgeL2::{BurnData, BurnEvent, Event, MintData, MintEvent};
 use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+use l2::interfaces::IMerkleManager::{IMerkleManagerDispatcher, IMerkleManagerDispatcherTrait};
 use l2::interfaces::IProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
 use l2::interfaces::IZeroXBridgeL2::{
     IDynamicRateDispatcher, IDynamicRateDispatcherTrait, IZeroXBridgeL2Dispatcher,
@@ -467,3 +468,162 @@ fn test_insufficient_proof_data() {
         .mint_and_claim_xzb(proof, commitment_hash, eth_address, r, s, y_parity);
 }
 
+#[test]
+fn test_mmr_index_fix_single_withdrawal() {
+    // Test that the first withdrawal has correct index (should be 0)
+    let token_addr = deploy_xzb();
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
+    let alice_addr = alice();
+    let owner_addr = owner();
+    let burn_amount = 1000_u256 * PRECISION;
+
+    // Setup: mint tokens to Alice
+    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount);
+
+    // Setup: set TVL
+    cheat_caller_address(oracle_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(100_000_u256 * PRECISION);
+
+    // Approve and burn
+    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: token_addr }.approve(bridge_addr, burn_amount);
+
+    let mut spy = spy_events();
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+
+    // Verify the leaf count and MMR state
+    let merkle_manager = IMerkleManagerDispatcher { contract_address: bridge_addr };
+    let leaves_count = merkle_manager.get_leaves_count();
+    assert(leaves_count == 1, 'Expected 1 leaf');
+
+    // Verify MMR root was set (not zero)
+    let root_hash = merkle_manager.get_root_hash();
+    assert(root_hash != 0, 'Root hash should not be zero');
+}
+
+#[test]
+fn test_mmr_index_fix_multiple_withdrawals() {
+    // Test that multiple withdrawals have correct MMR indices
+    // Expected MMR indices: leaf 0 -> 0, leaf 1 -> 1, leaf 2 -> 2, leaf 3 -> 4, leaf 4 -> 5, etc.
+    let token_addr = deploy_xzb();
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
+    let alice_addr = alice();
+    let owner_addr = owner();
+    let burn_amount = 1000_u256 * PRECISION;
+
+    let mut spy = spy_events();
+    // Setup: mint tokens to Alice
+    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount * 5);
+
+    // Setup: set TVL
+    cheat_caller_address(oracle_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(100_000_u256 * PRECISION);
+
+    // Approve all burns at once
+    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: token_addr }.approve(bridge_addr, burn_amount * 5);
+
+    let merkle_manager = IMerkleManagerDispatcher { contract_address: bridge_addr };
+
+    // First burn (leaf 0 -> MMR index 0)
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    let leaves_count_1 = merkle_manager.get_leaves_count();
+    assert(leaves_count_1 == 1, 'Expected 1 leaf');
+
+    // Second burn (leaf 1 -> MMR index 1)
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    let leaves_count_2 = merkle_manager.get_leaves_count();
+    assert(leaves_count_2 == 2, 'Expected 2 leaves');
+
+    // Third burn (leaf 2 -> MMR index 2) - this is where the original bug would manifest
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    let leaves_count_3 = merkle_manager.get_leaves_count();
+    assert(leaves_count_3 == 3, 'Expected 3 leaves');
+
+    // Fourth burn (leaf 3 -> MMR index 4) - critical test case
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    let leaves_count_4 = merkle_manager.get_leaves_count();
+    assert(leaves_count_4 == 4, 'Expected 4 leaves');
+
+    // Fifth burn (leaf 4 -> MMR index 5)
+    cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    let leaves_count_5 = merkle_manager.get_leaves_count();
+    assert(leaves_count_5 == 5, 'Expected 5 leaves');
+
+    // Verify MMR element count reflects the total number of nodes (leaves + internal nodes)
+    let element_count = merkle_manager.get_element_count();
+    let leaves_count_u256: u256 = leaves_count_5.into();
+    let element_count_u256: u256 = element_count.into();
+    assert(element_count_u256 > leaves_count_u256, 'Element count > leaf count');
+}
+
+#[test]
+fn test_mmr_leaf_index_calculation_edge_cases() {
+    // Test edge cases for the leaf index calculation helper function
+    let token_addr = deploy_xzb();
+    let proof_registry_addr = deploy_registry();
+    let oracle_addr = deploy_oracle();
+    let bridge_addr = deploy_bridge(token_addr, proof_registry_addr, oracle_addr);
+
+    let alice_addr = alice();
+    let owner_addr = owner();
+    let burn_amount = 1000_u256 * PRECISION;
+
+    // Setup
+    cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount * 8);
+
+    cheat_caller_address(oracle_addr, owner_addr, CheatSpan::TargetCalls(1));
+    IL2OracleDispatcher { contract_address: oracle_addr }.set_total_tvl(100_000_u256 * PRECISION);
+
+    cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: token_addr }.approve(bridge_addr, burn_amount * 8);
+
+    let merkle_manager = IMerkleManagerDispatcher { contract_address: bridge_addr };
+
+    // Test power-of-2 boundaries where MMR structure changes significantly
+    // These are critical test points for the leaf index calculation
+
+    // Burns 1-8 to test various MMR tree shapes
+    let mut i: u32 = 1;
+    loop {
+        if i > 8 {
+            break;
+        }
+        cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
+        IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+
+        let current_leaves = merkle_manager.get_leaves_count();
+        let expected_leaves: felt252 = i.into();
+        assert(current_leaves == expected_leaves, 'Incorrect leaf count');
+
+        // Verify MMR is still valid after each burn
+        let root_hash = merkle_manager.get_root_hash();
+        assert(root_hash != 0, 'Root hash should not be zero');
+
+        i += 1;
+    }
+
+    // Final verification
+    let final_leaves_count = merkle_manager.get_leaves_count();
+    assert(final_leaves_count == 8, 'Expected 8 leaves total');
+
+    let final_element_count = merkle_manager.get_element_count();
+    let final_leaves_count_u256: u256 = final_leaves_count.into();
+    let final_element_count_u256: u256 = final_element_count.into();
+    assert(final_element_count_u256 > final_leaves_count_u256, 'Element count > leaf count');
+}

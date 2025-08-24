@@ -173,6 +173,7 @@ pub mod ZeroXBridgeL2 {
         self.rates.write(rates);
         let mmr: MMR = Default::default();
         self.mmr.write(mmr);
+        self.leaves_count.write(0);
     }
 
     #[abi(embed_v0)]
@@ -399,8 +400,12 @@ pub mod ZeroXBridgeL2 {
 
         fn get_last_peaks(self: @ContractState) -> Array<felt252> {
             let mut peaks = array![];
-            for i in 0..self.last_peaks.len() {
-                peaks.append(self.last_peaks.at(i).read());
+            let len = self.last_peaks.len();
+            for i in 0..len {
+                let peak = self.last_peaks.at(i).read();
+                if peak != 0 { // Only include non-zero peaks
+                    peaks.append(peak);
+                }
             }
             peaks
         }
@@ -417,7 +422,7 @@ pub mod ZeroXBridgeL2 {
             proof: Array<felt252>,
         ) -> Result<bool, felt252> {
             let mmr = self.mmr.read();
-            mmr.verify_proof(index, commitment_hash, peaks.span(), proof.span())
+            MMRTrait::verify_proof(@mmr, index, commitment_hash, peaks.span(), proof.span())
         }
     }
 
@@ -425,58 +430,79 @@ pub mod ZeroXBridgeL2 {
     impl InternalFunctions of InternalFunctionsTrait {
         fn append_withdrawal_hash(ref self: ContractState, commitment_hash: felt252) {
             let mut mmr = self.mmr.read();
-            let last_peaks = self.get_last_peaks().span();
+            let last_peaks = self.get_last_peaks();
             let mut leaves_count = self.leaves_count.read();
 
-            match mmr.append(commitment_hash, last_peaks) {
+            match MMRTrait::append(ref mmr, commitment_hash, last_peaks.span()) {
                 Result::Ok((
                     root_hash, peaks,
                 )) => {
+                    // Store the new root and last position
                     self.node_index_to_root.write(mmr.last_pos, root_hash);
-                    leaves_count += 1;
 
-                    self.commitment_hash_to_index.write(commitment_hash, mmr.last_pos.into());
+                    // Calculate the correct MMR leaf index
+                    let correct_leaf_index = Self::leaf_count_to_mmr_index(leaves_count) + 1;
+                    self.commitment_hash_to_index.write(commitment_hash, correct_leaf_index);
+
+                    println!("Leaf data");
+                    println!("{:?}", leaves_count);
+                    println!("{:?}", correct_leaf_index);
+
+                    leaves_count += 1;
                     self.leaves_count.write(leaves_count);
 
-                    let last_peaks_len = last_peaks.len();
-                    let peaks_len = peaks.len();
-
-                    if last_peaks_len > peaks_len {
-                        // Overwrite up to peaks_len, then set the rest to 0
-                        for i in 0..peaks_len {
-                            let mut storage_ptr = self.last_peaks.at(i.into());
-                            storage_ptr.write(*peaks.at(i));
-                        }
-                        for i in peaks_len..last_peaks_len {
-                            let mut storage_ptr = self.last_peaks.at(i.into());
-                            storage_ptr.write(0);
-                        };
-                    } else {
-                        // Overwrite up to last_peaks_len, then append the rest
-                        for i in 0..last_peaks_len {
-                            let mut storage_ptr = self.last_peaks.at(i.into());
-                            storage_ptr.write(*peaks.at(i));
-                        }
-                        for i in last_peaks_len..peaks_len {
-                            self.last_peaks.push(*peaks.at(i));
-                        };
+                    // Clear and update peaks storage properly
+                    self.clear_peaks_storage();
+                    for i in 0..peaks.len() {
+                        self.last_peaks.push(*peaks.at(i));
                     }
 
                     self
                         .emit(
                             Event::WithdrawalHashAppended(
                                 WithdrawalHashAppended {
-                                    index: mmr.last_pos.into(),
+                                    index: correct_leaf_index,
                                     commitment_hash: commitment_hash,
-                                    root_hash: mmr.root,
+                                    root_hash: root_hash,
                                 },
                             ),
                         );
 
+                    // Write the updated MMR back to storage
                     self.mmr.write(mmr);
                 },
                 Result::Err(err) => { panic(array![err]) },
             }
+        }
+
+        fn clear_peaks_storage(ref self: ContractState) {
+            // Clear all existing peaks from storage
+            let current_len = self.last_peaks.len();
+            for _i in 0..current_len {
+                self.last_peaks.pop();
+            }
+        }
+
+        fn leaf_count_to_mmr_index(leaf_count: felt252) -> felt252 {
+            if leaf_count == 0 {
+                return 0;
+            }
+
+            // For MMR, the first leaf is at index 1, second at index 2, etc.
+            // But we need to account for internal nodes
+            let mut internal_nodes: u64 = 0;
+            let mut temp: u64 = leaf_count.try_into().unwrap();
+
+            // Count internal nodes created by building the MMR
+            let mut level = 1_u64;
+            while level < temp {
+                internal_nodes += temp / (level * 2);
+                level *= 2;
+            }
+
+            // The MMR index is leaf position + internal nodes before it
+            let mmr_index = leaf_count + internal_nodes.into();
+            mmr_index
         }
     }
 }
