@@ -3,6 +3,7 @@ use core::integer::u256;
 use core::poseidon::PoseidonTrait;
 use l2::core::ZeroXBridgeL2::ZeroXBridgeL2::{BurnData, BurnEvent, Event, MintData, MintEvent};
 use l2::interfaces::IL2Oracle::{IL2OracleDispatcher, IL2OracleDispatcherTrait};
+use l2::interfaces::IMerkleManager::{IMerkleManagerDispatcher, IMerkleManagerDispatcherTrait};
 use l2::interfaces::IProofRegistry::{IProofRegistryDispatcher, IProofRegistryDispatcherTrait};
 use l2::interfaces::IZeroXBridgeL2::{
     IDynamicRateDispatcher, IDynamicRateDispatcherTrait, IZeroXBridgeL2Dispatcher,
@@ -10,7 +11,6 @@ use l2::interfaces::IZeroXBridgeL2::{
 };
 use l2::interfaces::IxZBErc20::{IXZBERC20Dispatcher, IXZBERC20DispatcherTrait};
 use l2::mocks::MockRegistry::{IMockRegistryDispatcher, IMockRegistryDispatcherTrait};
-use l2::interfaces::IMerkleManager::{IMerkleManagerDispatcher, IMerkleManagerDispatcherTrait};
 use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use openzeppelin_utils::serde::SerializedAppend;
 use snforge_std::{
@@ -519,6 +519,7 @@ fn test_mmr_index_fix_multiple_withdrawals() {
     let owner_addr = owner();
     let burn_amount = 1000_u256 * PRECISION;
 
+    let mut spy = spy_events();
     // Setup: mint tokens to Alice
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
     IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount * 5);
@@ -605,17 +606,17 @@ fn test_mmr_leaf_index_calculation_edge_cases() {
         }
         cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
         IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
-        
+
         let current_leaves = merkle_manager.get_leaves_count();
         let expected_leaves: felt252 = i.into();
         assert(current_leaves == expected_leaves, 'Incorrect leaf count');
-        
+
         // Verify MMR is still valid after each burn
         let root_hash = merkle_manager.get_root_hash();
         assert(root_hash != 0, 'Root hash should not be zero');
-        
+
         i += 1;
-    };
+    }
 
     // Final verification
     let final_leaves_count = merkle_manager.get_leaves_count();

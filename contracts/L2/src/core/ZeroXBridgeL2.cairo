@@ -403,7 +403,7 @@ pub mod ZeroXBridgeL2 {
             let len = self.last_peaks.len();
             for i in 0..len {
                 let peak = self.last_peaks.at(i).read();
-                if peak != 0 {  // Only include non-zero peaks
+                if peak != 0 { // Only include non-zero peaks
                     peaks.append(peak);
                 }
             }
@@ -434,14 +434,20 @@ pub mod ZeroXBridgeL2 {
             let mut leaves_count = self.leaves_count.read();
 
             match MMRTrait::append(ref mmr, commitment_hash, last_peaks.span()) {
-                Result::Ok((root_hash, peaks)) => {
+                Result::Ok((
+                    root_hash, peaks,
+                )) => {
                     // Store the new root and last position
                     self.node_index_to_root.write(mmr.last_pos, root_hash);
-                    
+
                     // Calculate the correct MMR leaf index
-                    let correct_leaf_index = Self::leaf_count_to_mmr_index(leaves_count + 1);
+                    let correct_leaf_index = Self::leaf_count_to_mmr_index(leaves_count) + 1;
                     self.commitment_hash_to_index.write(commitment_hash, correct_leaf_index);
-                    
+
+                    println!("Leaf data");
+                    println!("{:?}", leaves_count);
+                    println!("{:?}", correct_leaf_index);
+
                     leaves_count += 1;
                     self.leaves_count.write(leaves_count);
 
