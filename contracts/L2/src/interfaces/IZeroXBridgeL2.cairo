@@ -15,7 +15,7 @@ pub trait IZeroXBridgeL2<TContractState> {
         y_parity: bool,
     );
 
-    fn burn_xzb_for_unlock(ref self: TContractState, amount: core::integer::u256);
+    fn burn_xzb_for_unlock(ref self: TContractState, burn_id: u256, amount: core::integer::u256);
 }
 
 #[starknet::interface]

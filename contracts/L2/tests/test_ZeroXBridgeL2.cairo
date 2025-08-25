@@ -130,8 +130,10 @@ fn test_burn_xzb_for_unlock_happy_path() {
 
     // Burn tokens through bridge with alice as caller.
     let mut spy = spy_events();
+    let burn_id = 123124_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
 
     let burn_amount_usd = (burn_amount * PRECISION) / rate;
 
@@ -150,7 +152,11 @@ fn test_burn_xzb_for_unlock_happy_path() {
         bridge_addr,
         Event::BurnEvent(
             BurnEvent {
-                user: alice_addr, amount: burn_amount_usd, nonce: 0, commitment_hash: expected_hash,
+                burn_id,
+                user: alice_addr,
+                amount: burn_amount_usd,
+                nonce: 0,
+                commitment_hash: expected_hash,
             },
         ),
     );
@@ -198,9 +204,11 @@ fn test_burn_xzb_updates_balance() {
     cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
     erc20.approve(bridge_addr, burn_amount);
 
+    let burn_id = 123124_u256;
     // Burn tokens through bridge with alice as caller
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
 
     // Check balance after burn.
     let final_balance = erc20.balance_of(alice_addr);
@@ -233,9 +241,11 @@ fn test_burn_xzb_insufficient_balance() {
     cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
     IERC20Dispatcher { contract_address: token_addr }.approve(bridge_addr, burn_amount);
 
+    let burn_id = 123124_u256;
     // Attempt to burn 500 tokens when balance is only 300.
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
 }
 
 
@@ -492,9 +502,10 @@ fn test_mmr_index_fix_single_withdrawal() {
     cheat_caller_address(token_addr, alice_addr, CheatSpan::TargetCalls(1));
     IERC20Dispatcher { contract_address: token_addr }.approve(bridge_addr, burn_amount);
 
-    let mut spy = spy_events();
+    let burn_id = 123124_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
 
     // Verify the leaf count and MMR state
     let merkle_manager = IMerkleManagerDispatcher { contract_address: bridge_addr };
@@ -519,7 +530,6 @@ fn test_mmr_index_fix_multiple_withdrawals() {
     let owner_addr = owner();
     let burn_amount = 1000_u256 * PRECISION;
 
-    let mut spy = spy_events();
     // Setup: mint tokens to Alice
     cheat_caller_address(token_addr, owner_addr, CheatSpan::TargetCalls(1));
     IXZBERC20Dispatcher { contract_address: token_addr }.mint(alice_addr, burn_amount * 5);
@@ -535,32 +545,42 @@ fn test_mmr_index_fix_multiple_withdrawals() {
     let merkle_manager = IMerkleManagerDispatcher { contract_address: bridge_addr };
 
     // First burn (leaf 0 -> MMR index 0)
+    let burn_id = 123124_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
     let leaves_count_1 = merkle_manager.get_leaves_count();
     assert(leaves_count_1 == 1, 'Expected 1 leaf');
 
     // Second burn (leaf 1 -> MMR index 1)
+    let burn_id = 1223124_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
     let leaves_count_2 = merkle_manager.get_leaves_count();
     assert(leaves_count_2 == 2, 'Expected 2 leaves');
 
     // Third burn (leaf 2 -> MMR index 2) - this is where the original bug would manifest
+    let burn_id = 323124_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
     let leaves_count_3 = merkle_manager.get_leaves_count();
     assert(leaves_count_3 == 3, 'Expected 3 leaves');
 
     // Fourth burn (leaf 3 -> MMR index 4) - critical test case
+    let burn_id = 423124_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
     let leaves_count_4 = merkle_manager.get_leaves_count();
     assert(leaves_count_4 == 4, 'Expected 4 leaves');
 
     // Fifth burn (leaf 4 -> MMR index 5)
+    let burn_id = 523124_u256;
     cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+    IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+        .burn_xzb_for_unlock(burn_id, burn_amount);
     let leaves_count_5 = merkle_manager.get_leaves_count();
     assert(leaves_count_5 == 5, 'Expected 5 leaves');
 
@@ -604,8 +624,10 @@ fn test_mmr_leaf_index_calculation_edge_cases() {
         if i > 8 {
             break;
         }
+        let burn_id = 1;
         cheat_caller_address(bridge_addr, alice_addr, CheatSpan::TargetCalls(1));
-        IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }.burn_xzb_for_unlock(burn_amount);
+        IZeroXBridgeL2Dispatcher { contract_address: bridge_addr }
+            .burn_xzb_for_unlock(burn_id, burn_amount);
 
         let current_leaves = merkle_manager.get_leaves_count();
         let expected_leaves: felt252 = i.into();
