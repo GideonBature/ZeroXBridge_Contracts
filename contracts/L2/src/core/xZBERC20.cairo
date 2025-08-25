@@ -94,7 +94,7 @@ pub mod xZBERC20 {
 
     #[generate_trait]
     #[abi(per_item)]
-    impl TestMint of IxZbTest<ContractState> {
+    impl TestMint of IxZbTest {
         #[external(v0)]
         fn test_mint(ref self: ContractState, recipient: ContractAddress, amount: u256) {
             self.erc20.mint(recipient, amount);

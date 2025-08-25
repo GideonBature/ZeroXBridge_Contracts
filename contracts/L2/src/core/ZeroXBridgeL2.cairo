@@ -134,6 +134,7 @@ pub mod ZeroXBridgeL2 {
 
     #[derive(Drop, Debug, starknet::Event)]
     pub struct BurnEvent {
+        pub burn_id: u256,
         pub user: ContractAddress,
         pub amount: u256,
         pub nonce: felt252,
@@ -241,7 +242,7 @@ pub mod ZeroXBridgeL2 {
         }
 
 
-        fn burn_xzb_for_unlock(ref self: ContractState, amount: u256) {
+        fn burn_xzb_for_unlock(ref self: ContractState, burn_id: u256, amount: u256) {
             let caller = get_caller_address();
             let token_addr = self.xzb_token.read();
             let protocol = get_contract_address();
@@ -277,6 +278,7 @@ pub mod ZeroXBridgeL2 {
             self
                 .emit(
                     BurnEvent {
+                        burn_id,
                         user: caller,
                         amount: burn_amount_usd,
                         nonce: current_nonce,
@@ -479,7 +481,7 @@ pub mod ZeroXBridgeL2 {
             // Clear all existing peaks from storage
             let current_len = self.last_peaks.len();
             for _i in 0..current_len {
-                self.last_peaks.pop();
+                let _ = self.last_peaks.pop();
             }
         }
 
