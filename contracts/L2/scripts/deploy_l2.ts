@@ -11,8 +11,8 @@ import { Account, CallData, Contract, RpcProvider, json } from "starknet";
 dotenv.config();
 
 const DEFAULT_RPC_URLS = {
-    sepolia: "https://starknet-sepolia.public.blastapi.io/rpc/v0_7",
-    mainnet: "https://starknet-mainnet.public.blastapi.io/rpc/v0_7", 
+    sepolia: "https://starknet-sepolia.public.blastapi.io/rpc/v0_8",
+    mainnet: "https://starknet-mainnet.public.blastapi.io/rpc/v0_8", 
     devnet: "http://127.0.0.1:5050"
 };
 
@@ -312,7 +312,8 @@ async function declareContract(
             }
         }
         spinner.fail(`${contractName} declaration failed!`);
-        console.error(error.toString());
+        // console.error(error.toString());
+        fs.appendFileSync("error.log", error.toString() + "\n");
         throw error;
     }
 }
@@ -360,6 +361,7 @@ async function declareAndDeploy(
     network: string
 ): Promise<DeployedContract> {
     // Step 1: Declare the contract
+    console.log(`\n=== Processing ${contractName} ===`);
     const { classHash, declareTx } = await declareContract(contractName, account);
     
     // Step 2: Deploy using the class hash
@@ -671,7 +673,7 @@ async function main(): Promise<void> {
 // Execute if this file is run directly
 if (require.main === module) {
     main().then(() => process.exit(0)).catch((error) => {
-        console.error("Deployment failed:", error);
+        // console.error("Deployment failed:", error);
         process.exit(1);
     });
 }

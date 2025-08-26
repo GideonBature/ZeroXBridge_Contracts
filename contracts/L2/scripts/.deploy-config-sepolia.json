@@ -1,8 +1,8 @@
 {
   "network": "sepolia",
-  "accountAddress": "0x069380ac3a70c38102c8c2183a47f7741b93d61cb9dba8de595408759308b14c",
-  "starknetRpcUrl": "https://starknet-sepolia.public.blastapi.io/rpc/v0_7",
-  "owner": "0x069380ac3a70c38102c8c2183a47f7741b93d61cb9dba8de595408759308b14c",
+  "accountAddress": "0x076927323f53353790b2a6d2cb7be146bfd1fdafcf34ae0194ba454a99befa82",
+  "starknetRpcUrl": "https://starknet-sepolia.public.blastapi.io/rpc/v0_8",
+  "owner": "0x076927323f53353790b2a6d2cb7be146bfd1fdafcf34ae0194ba454a99befa82",
   "minRate": "1000000000000000000",
   "maxRate": "2000000000000000000"
 }
