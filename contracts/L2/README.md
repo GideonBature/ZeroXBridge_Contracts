@@ -59,8 +59,8 @@ npm run deploy:validate   # Validate deployment setup
 ### Network Configuration
 
 #### Default RPC URLs:
-- **Sepolia**: `https://starknet-sepolia.public.blastapi.io/rpc/v0_7`
-- **Mainnet**: `https://starknet-mainnet.public.blastapi.io/rpc/v0_7`
+- **Sepolia**: `https://starknet-sepolia.public.blastapi.io/rpc/v0_8`
+- **Mainnet**: `https://starknet-mainnet.public.blastapi.io/rpc/v0_8`
 - **Devnet**: `http://127.0.0.1:5050`
 
 
@@ -68,10 +68,10 @@ npm run deploy:validate   # Validate deployment setup
 
 ### Sepolia
 
-- Oracle Contract: [0x006aff010e672d581173fa959a17de9132b4e2e8ab2ce515b5d191c8f75fcc80](https://sepolia.starkscan.co/contract/0x006aff010e672d581173fa959a17de9132b4e2e8ab2ce515b5d191c8f75fcc80#read-write-contract)
+- Oracle Contract: [0x1e4acab001e40d194f15927bb0e832887a219809d0be6cf308f3e41a4cfd246](https://sepolia.starkscan.co/contract/0x1e4acab001e40d194f15927bb0e832887a219809d0be6cf308f3e41a4cfd246#read-write-contract)
 
-- Proof Registry: [0x0055c36521975f4c6a2ec2d20add8d7161022f97bc01c07cf1677005f16ea5f9](https://sepolia.starkscan.co/contract/0x0055c36521975f4c6a2ec2d20add8d7161022f97bc01c07cf1677005f16ea5f9#read-write-contract-sub-read)
+- Proof Registry: [0x3a5d9d2fce8a9dac6a6b5c8cade5668b19e30248611159c7788236a49ce8b9a](https://sepolia.starkscan.co/contract/0x3a5d9d2fce8a9dac6a6b5c8cade5668b19e30248611159c7788236a49ce8b9a#read-write-contract-sub-read)
 
-- xZBERC20: [0x00d989185d5246739f38fd5032b4ff44c2f203386b0a9b7f391c8e11967cb92b](https://sepolia.starkscan.co/contract/0x00d989185d5246739f38fd5032b4ff44c2f203386b0a9b7f391c8e11967cb92b#read-write-contract)
+- xZBERC20: [0x26cfc43ee6e47541c1de22e91382c14c2c524de52d6abdd1275e7b37cb01276](https://sepolia.starkscan.co/contract/0x26cfc43ee6e47541c1de22e91382c14c2c524de52d6abdd1275e7b37cb01276#read-write-contract)
 
-- L2Bridge: [0x0123a4ce7980e3c4f5832af0735fc3beabdc157379e09aaf7c5e62dfa8c19427](https://sepolia.starkscan.co/contract/0x0123a4ce7980e3c4f5832af0735fc3beabdc157379e09aaf7c5e62dfa8c19427#read-write-contract-sub-write)
+- L2Bridge: [0x58bdc4e4f39b648c01761324247d98ea68bc9fd5e3541e732d146385e575a63](https://sepolia.starkscan.co/contract/0x58bdc4e4f39b648c01761324247d98ea68bc9fd5e3541e732d146385e575a63#read-write-contract-sub-write)
