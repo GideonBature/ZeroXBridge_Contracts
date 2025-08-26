@@ -4,7 +4,7 @@ import path from "path";
 import dotenv from "dotenv";
 import ora from "ora";
 import { Command } from "commander";
-import { Account, CallData, Contract, RpcProvider, json, provider } from "starknet";
+import { Account, CallData, Contract, RpcProvider, json } from "starknet";
 
 // === Constants ==================================================================================
 
@@ -373,16 +373,16 @@ async function declareAndDeploy(
         network
     );
 
-    // Step 3: Get contract abi
+    // Step 3: Get contract ABI and save it under contracts/L2/abi
     const provider = new RpcProvider({ nodeUrl: config.starknetRpcUrl! });
     const { abi } = await provider.getClassAt(address);
-    if (!fs.existsSync("abi")) {
-        fs.mkdirSync("abi");
+    const outDir = path.join(__dirname, "..", "abi");
+    if (!fs.existsSync(outDir)) {
+      fs.mkdirSync(outDir, { recursive: true });
     }
-
-    // Save ABI to file
-    console.log(`Saving ABI for ${contractName} to abi/${contractName}.abi.json`);
-    fs.writeFileSync(`abi/${contractName}.abi.json`, JSON.stringify(abi, null, 2));
+    const outPath = path.join(outDir, `${contractName}.abi.json`);
+    console.log(`Saving ABI for ${contractName} to ${outPath}`);
+    fs.writeFileSync(outPath, JSON.stringify(abi, null, 2));
     
     return {
         address,
