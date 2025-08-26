@@ -22,5 +22,13 @@
     "deploymentTx": "0x78eb2275af5d9c83a9838ab65dc05d771ffe43249e6fe3fa3c33f09089dc3b9",
     "timestamp": 1756157371521,
     "network": "sepolia"
+  },
+  "ZeroXBridgeL2": {
+    "address": "0x62359721fdd812aa83ced7f0b74741cfb544f77bfe54ce15ec9e9c4136015da",
+    "classHash": "0x01fcf01b6873a91e4b6942b2596d3dc3f5e5867ba0fb9b5817202c01f6703eb3",
+    "declareTx": "already_declared",
+    "deploymentTx": "0x397447f8fac654cf3b6b3728480edfca9459969e97f9a89c7fcc2f8a144b465",
+    "timestamp": 1756213282767,
+    "network": "sepolia"
   }
 }

@@ -446,10 +446,6 @@ pub mod ZeroXBridgeL2 {
                     let correct_leaf_index = Self::leaf_count_to_mmr_index(leaves_count) + 1;
                     self.commitment_hash_to_index.write(commitment_hash, correct_leaf_index);
 
-                    println!("Leaf data");
-                    println!("{:?}", leaves_count);
-                    println!("{:?}", correct_leaf_index);
-
                     leaves_count += 1;
                     self.leaves_count.write(leaves_count);
 

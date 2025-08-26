@@ -312,8 +312,7 @@ async function declareContract(
             }
         }
         spinner.fail(`${contractName} declaration failed!`);
-        // console.error(error.toString());
-        fs.appendFileSync("error.log", error.toString() + "\n");
+        console.error(error.toString());
         throw error;
     }
 }
@@ -673,7 +672,7 @@ async function main(): Promise<void> {
 // Execute if this file is run directly
 if (require.main === module) {
     main().then(() => process.exit(0)).catch((error) => {
-        // console.error("Deployment failed:", error);
+        console.error("Deployment failed:", error);
         process.exit(1);
     });
 }
