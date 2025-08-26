@@ -4,7 +4,7 @@ import path from "path";
 import dotenv from "dotenv";
 import ora from "ora";
 import { Command } from "commander";
-import { Account, CallData, Contract, RpcProvider, json } from "starknet";
+import { Account, CallData, Contract, RpcProvider, json, provider } from "starknet";
 
 // === Constants ==================================================================================
 
@@ -354,6 +354,7 @@ async function deployContract(
 }
 
 async function declareAndDeploy(
+    config: DeploymentConfig,
     contractName: string,
     constructorArgs: any[],
     account: Account,
@@ -371,6 +372,17 @@ async function declareAndDeploy(
         account,
         network
     );
+
+    // Step 3: Get contract abi
+    const provider = new RpcProvider({ nodeUrl: config.starknetRpcUrl! });
+    const { abi } = await provider.getClassAt(address);
+    if (!fs.existsSync("abi")) {
+        fs.mkdirSync("abi");
+    }
+
+    // Save ABI to file
+    console.log(`Saving ABI for ${contractName} to abi/${contractName}.abi.json`);
+    fs.writeFileSync(`abi/${contractName}.abi.json`, JSON.stringify(abi, null, 2));
     
     return {
         address,
@@ -388,6 +400,7 @@ async function declareAndDeploy(
  * Deploy ProofRegistry contract
  */
 async function deployProofRegistry(
+    config: DeploymentConfig,
     account: Account,
     network: string,
     deploymentState: DeploymentState
@@ -397,7 +410,7 @@ async function deployProofRegistry(
         return;
     }
 
-    const deployed = await declareAndDeploy("ProofRegistry", [], account, network);
+    const deployed = await declareAndDeploy(config, "ProofRegistry", [], account, network);
     deploymentState.ProofRegistry = deployed;
     saveDeploymentState(deploymentState, network);
 }
@@ -417,7 +430,7 @@ async function deployL2Oracle(
     }
 
     const constructorArgs = [config.owner];
-    const deployed = await declareAndDeploy("L2Oracle", constructorArgs, account, network);
+    const deployed = await declareAndDeploy(config, "L2Oracle", constructorArgs, account, network);
     deploymentState.L2Oracle = deployed;
     saveDeploymentState(deploymentState, network);
 }
@@ -437,7 +450,7 @@ async function deployXZBERC20(
     }
 
     const constructorArgs = [config.owner];
-    const deployed = await declareAndDeploy("xZBERC20", constructorArgs, account, network);
+    const deployed = await declareAndDeploy(config, "xZBERC20", constructorArgs, account, network);
     deploymentState.xZBERC20 = deployed;
     saveDeploymentState(deploymentState, network);
 }
@@ -476,7 +489,7 @@ async function deployZeroXBridgeL2(
         { low: config.maxRate, high: "0" }            // max_rate (u256)
     ];
 
-    const deployed = await declareAndDeploy("ZeroXBridgeL2", constructorArgs, account, network);
+    const deployed = await declareAndDeploy(config, "ZeroXBridgeL2", constructorArgs, account, network);
     deploymentState.ZeroXBridgeL2 = deployed;
     saveDeploymentState(deploymentState, network);
 }
@@ -532,7 +545,7 @@ async function deployAllContracts(config: DeploymentConfig): Promise<void> {
     for (const contractName of DEPLOYMENT_ORDER) {
         switch (contractName) {
             case "ProofRegistry":
-                await deployProofRegistry(account, config.network!, deploymentState);
+                await deployProofRegistry(config, account, config.network!, deploymentState);
                 break;
             case "L2Oracle":
                 await deployL2Oracle(config, account, config.network!, deploymentState);

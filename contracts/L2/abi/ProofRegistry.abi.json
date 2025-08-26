@@ -1,0 +1,108 @@
+[
+  {
+    "type": "impl",
+    "name": "ProofRegistryImpl",
+    "interface_name": "l2::interfaces::IProofRegistry::IProofRegistry"
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "l2::interfaces::IProofRegistry::IProofRegistry",
+    "items": [
+      {
+        "type": "function",
+        "name": "get_verified_merkle_root",
+        "inputs": [
+          {
+            "name": "commitment_hash",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::felt252"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "check_proof",
+        "inputs": [
+          {
+            "name": "commitment_hash",
+            "type": "core::felt252"
+          },
+          {
+            "name": "merkle_root",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "register_deposit_proof",
+        "inputs": [
+          {
+            "name": "commitment_hash",
+            "type": "core::felt252"
+          },
+          {
+            "name": "merkle_root",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ProofRegistry::ProofRegistry::DepositCommitmentHashProven",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "commitment_hash",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "merkle_root",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ProofRegistry::ProofRegistry::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "DepositCommitmentHashProven",
+        "type": "l2::core::ProofRegistry::ProofRegistry::DepositCommitmentHashProven",
+        "kind": "nested"
+      }
+    ]
+  }
+]

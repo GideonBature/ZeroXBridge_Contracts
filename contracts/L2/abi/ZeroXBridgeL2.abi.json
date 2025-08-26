@@ -1,0 +1,679 @@
+[
+  {
+    "type": "impl",
+    "name": "MintBurnXzbImpl",
+    "interface_name": "l2::interfaces::IZeroXBridgeL2::IZeroXBridgeL2"
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "l2::interfaces::IZeroXBridgeL2::IZeroXBridgeL2",
+    "items": [
+      {
+        "type": "function",
+        "name": "mint_and_claim_xzb",
+        "inputs": [
+          {
+            "name": "proof",
+            "type": "core::array::Array::<core::felt252>"
+          },
+          {
+            "name": "commitment_hash",
+            "type": "core::felt252"
+          },
+          {
+            "name": "eth_address",
+            "type": "core::felt252"
+          },
+          {
+            "name": "r",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "s",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "y_parity",
+            "type": "core::bool"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "burn_xzb_for_unlock",
+        "inputs": [
+          {
+            "name": "burn_id",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "amount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "DynamicRateImpl",
+    "interface_name": "l2::interfaces::IZeroXBridgeL2::IDynamicRate"
+  },
+  {
+    "type": "enum",
+    "name": "core::option::Option::<core::integer::u256>",
+    "variants": [
+      {
+        "name": "Some",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "None",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "l2::interfaces::IZeroXBridgeL2::IDynamicRate",
+    "items": [
+      {
+        "type": "function",
+        "name": "get_dynamic_rate",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_current_xzb_supply",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "set_rates",
+        "inputs": [
+          {
+            "name": "min_rate",
+            "type": "core::option::Option::<core::integer::u256>"
+          },
+          {
+            "name": "max_rate",
+            "type": "core::option::Option::<core::integer::u256>"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_oracle",
+        "inputs": [
+          {
+            "name": "oracle",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "set_xzb_token",
+        "inputs": [
+          {
+            "name": "xzb_token",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "UpgradeableImpl",
+    "interface_name": "openzeppelin_upgrades::interface::IUpgradeable"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_upgrades::interface::IUpgradeable",
+    "items": [
+      {
+        "type": "function",
+        "name": "upgrade",
+        "inputs": [
+          {
+            "name": "new_class_hash",
+            "type": "core::starknet::class_hash::ClassHash"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "MerkleImpl",
+    "interface_name": "l2::interfaces::IMerkleManager::IMerkleManager"
+  },
+  {
+    "type": "enum",
+    "name": "core::result::Result::<core::bool, core::felt252>",
+    "variants": [
+      {
+        "name": "Ok",
+        "type": "core::bool"
+      },
+      {
+        "name": "Err",
+        "type": "core::felt252"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "l2::interfaces::IMerkleManager::IMerkleManager",
+    "items": [
+      {
+        "type": "function",
+        "name": "get_root_hash",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::felt252"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_element_count",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::felt252"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_commitment_index",
+        "inputs": [
+          {
+            "name": "commitment_hash",
+            "type": "core::felt252"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::felt252"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_last_peaks",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_leaves_count",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::felt252"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "verify_proof",
+        "inputs": [
+          {
+            "name": "index",
+            "type": "core::integer::u32"
+          },
+          {
+            "name": "commitment_hash",
+            "type": "core::felt252"
+          },
+          {
+            "name": "peaks",
+            "type": "core::array::Array::<core::felt252>"
+          },
+          {
+            "name": "proof",
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::result::Result::<core::bool, core::felt252>"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableMixinImpl",
+    "interface_name": "openzeppelin_access::ownable::interface::OwnableABI"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_access::ownable::interface::OwnableABI",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "transferOwnership",
+        "inputs": [
+          {
+            "name": "newOwner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounceOwnership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "token",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "proof_registry_address",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "oracle_address",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "min_rate",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "max_rate",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::BurnEvent",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "burn_id",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "nonce",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "commitment_hash",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::MintEvent",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "recipient",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "nonce",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "commitment_hash",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::RateUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "new_rate",
+        "type": "core::integer::u256",
+        "kind": "key"
+      },
+      {
+        "name": "tvl",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::OracleUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "oracle",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::XZBTokenUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "xzb_token",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::RateLimitsUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "min_rate",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "max_rate",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::WithdrawalHashAppended",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "index",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "commitment_hash",
+        "type": "core::felt252",
+        "kind": "data"
+      },
+      {
+        "name": "root_hash",
+        "type": "core::felt252",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnershipTransferStarted",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_introspection::src5::SRC5Component::Event",
+    "kind": "enum",
+    "variants": []
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "class_hash",
+        "type": "core::starknet::class_hash::ClassHash",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Upgraded",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "BurnEvent",
+        "type": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::BurnEvent",
+        "kind": "nested"
+      },
+      {
+        "name": "MintEvent",
+        "type": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::MintEvent",
+        "kind": "nested"
+      },
+      {
+        "name": "RateUpdated",
+        "type": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::RateUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "OracleUpdated",
+        "type": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::OracleUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "XZBTokenUpdated",
+        "type": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::XZBTokenUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "RateLimitsUpdated",
+        "type": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::RateLimitsUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "WithdrawalHashAppended",
+        "type": "l2::core::ZeroXBridgeL2::ZeroXBridgeL2::WithdrawalHashAppended",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnableEvent",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "SRC5Event",
+        "type": "openzeppelin_introspection::src5::SRC5Component::Event",
+        "kind": "flat"
+      },
+      {
+        "name": "UpgradeableEvent",
+        "type": "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+        "kind": "flat"
+      }
+    ]
+  }
+]
