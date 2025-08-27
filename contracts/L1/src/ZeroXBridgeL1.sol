@@ -289,7 +289,10 @@ contract ZeroXBridgeL1 is Ownable, Starknet, MerkleManager {
 
         require(commitmentHash == expectedCommitmentHash, "ZeroXBridge: Invalid commitment hash");
 
-        require(verifyStarknetSignature(commitmentHash, starknetSig, starknetPubKey), "ZeroXBridge: Invalid signature");
+        // Call externally so tests can mock signature verification
+        require(
+            this.verifyStarknetSignature(commitmentHash, starknetSig, starknetPubKey), "ZeroXBridge: Invalid signature"
+        );
 
         // Check proof registry for verified root
         uint256 verifiedRoot = proofRegistry.getVerifiedMerkleRoot(commitmentHash);

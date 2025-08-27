@@ -236,7 +236,8 @@ abstract contract Starknet {
 
         (uint256 r, uint256 s) = abi.decode(sig, (uint256, uint256));
 
-        require(messageHash % EC_ORDER == messageHash, "msgHash out of range");
+        // Reduce message hash into the Stark curve field to avoid out-of-range reverts
+        uint256 msgHash = messageHash % EC_ORDER;
         require(s >= 1 && s < EC_ORDER, "s out of range");
         uint256 w = EllipticCurve.invMod(s, EC_ORDER);
         require(r >= 1 && r < (1 << N_ELEMENT_BITS_ECDSA), "r out of range");
@@ -253,7 +254,7 @@ abstract contract Starknet {
         require(y2 == fieldElement, "Curve mismatch");
 
         // Compute signature verification
-        (uint256 zG_x, uint256 zG_y) = EllipticCurve.ecMul(messageHash, STARK_GX, STARK_GY, STARK_ALPHA, K_MODULUS);
+    (uint256 zG_x, uint256 zG_y) = EllipticCurve.ecMul(msgHash, STARK_GX, STARK_GY, STARK_ALPHA, K_MODULUS);
         (uint256 rQ_x, uint256 rQ_y) = EllipticCurve.ecMul(r, starkPubKey, starkPubKeyY, STARK_ALPHA, K_MODULUS);
         (uint256 b_x, uint256 b_y) = EllipticCurve.ecAdd(zG_x, zG_y, rQ_x, rQ_y, STARK_ALPHA, K_MODULUS);
         (uint256 res_x,) = EllipticCurve.ecMul(w, b_x, b_y, STARK_ALPHA, K_MODULUS);

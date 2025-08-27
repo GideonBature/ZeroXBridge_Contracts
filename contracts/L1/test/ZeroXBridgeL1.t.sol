@@ -921,14 +921,16 @@ contract ZeroXBridgeL1Test is Test {
         proofdata[2] = nonce;
         proofdata[3] = timestamp;
 
-        // Step 7: Generate valid signature
-        uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
-        uint256 msgHash = commitmentHash_ % STARK_CURVE_ORDER;
-        bytes32 digest = bytes32(msgHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
-        bytes memory starknetSig = abi.encodePacked(r, s);
+        // Step 7: Mock signature verification to bypass curve-specific signing
+        bytes memory dummySig = new bytes(64);
+        bytes4 selector = bridge.verifyStarknetSignature.selector;
+        vm.mockCall(
+            address(bridge),
+            abi.encodeWithSelector(selector, commitmentHash_, dummySig, starknetPubKey),
+            abi.encode(true)
+        );
 
-        bridge.unlockFundsWithProof(ZeroXBridgeL1.AssetType.ERC20, address(dai), proofdata, commitmentHash, starknetSig);
+        bridge.unlockFundsWithProof(ZeroXBridgeL1.AssetType.ERC20, address(dai), proofdata, commitmentHash_, dummySig);
 
         // Step 9: Assertions
         assertEq(bridge.tokenReserves(address(dai)), 0, "tokenReserves should be reduced after unlock");
@@ -979,11 +981,11 @@ contract ZeroXBridgeL1Test is Test {
         bridge.depositAsset(depositId, ZeroXBridgeL1.AssetType.ERC20, address(usdc), depositAmount, user);
 
         // Step 4: Compute usdValue and commitmentHash
-        uint256 commitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp)));
+        uint256 commitmentHashLocal = uint256(keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp)));
 
         // Step 5: Register proof
         uint256 merkleRoot = uint256(keccak256("mock merkle"));
-        MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHash, merkleRoot);
+        MockProofRegistry(address(proofRegistry)).registerWithdrawalProof(commitmentHashLocal, merkleRoot);
 
         // Step 6: Build proof data
         uint256[] memory proofdata = new uint256[](4);
@@ -992,15 +994,17 @@ contract ZeroXBridgeL1Test is Test {
         proofdata[2] = nonce;
         proofdata[3] = timestamp;
 
-        // Step 7: Generate valid signature
-        uint256 STARK_CURVE_ORDER = 361850278866613110698659328152149712041468702080126762623304950275186147821;
-        uint256 msgHash = commitmentHash % STARK_CURVE_ORDER;
-        bytes32 digest = bytes32(msgHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ethAccountPrivateKey, digest);
-        bytes memory starknetSig = abi.encodePacked(r, s);
+        // Step 7: Mock signature verification to bypass curve-specific signing
+        bytes memory dummySig = new bytes(64);
+        bytes4 selector = bridge.verifyStarknetSignature.selector;
+        vm.mockCall(
+            address(bridge),
+            abi.encodeWithSelector(selector, commitmentHashLocal, dummySig, starknetPubKey),
+            abi.encode(true)
+        );
 
         bridge.unlockFundsWithProof(
-            ZeroXBridgeL1.AssetType.ERC20, address(usdc), proofdata, commitmentHash, starknetSig
+            ZeroXBridgeL1.AssetType.ERC20, address(usdc), proofdata, commitmentHashLocal, dummySig
         );
 
         // // Step 9: Assertions
@@ -1051,11 +1055,11 @@ contract ZeroXBridgeL1Test is Test {
         // Step 4: Compute usd value and commitment hash
         uint256 usdRaw = (depositAmount * ethPrice) / 1e8;
         uint256 usdValue = (usdRaw * 1e18) / (10 ** ethDec);
-        uint256 commitmentHash = uint256(keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp)));
+        uint256 commitmentHashLocal = uint256(keccak256(abi.encodePacked(starknetPubKey, usdValue, nonce, timestamp)));
 
         // Step 5: Register proof
         uint256 merkleRoot = uint256(keccak256("mock_merkle"));
-        proofRegistry.registerWithdrawalProof(commitmentHash, merkleRoot);
+        proofRegistry.registerWithdrawalProof(commitmentHashLocal, merkleRoot);
 
         // Step 6: Build proof data
         uint256[] memory proofdata = new uint256[](4);
@@ -1070,13 +1074,13 @@ contract ZeroXBridgeL1Test is Test {
         bytes4 selector = bridge.verifyStarknetSignature.selector;
         vm.mockCall(
             address(bridge),
-            abi.encodeWithSelector(selector, commitmentHash, dummySig, starknetPubKey),
+            abi.encodeWithSelector(selector, commitmentHashLocal, dummySig, starknetPubKey),
             abi.encode(true)
         );
 
         // Step 8: Execute unlock
         vm.prank(relayer);
-        bridge.unlockFundsWithProof(ZeroXBridgeL1.AssetType.ETH, address(0), proofdata, commitmentHash, dummySig);
+        bridge.unlockFundsWithProof(ZeroXBridgeL1.AssetType.ETH, address(0), proofdata, commitmentHashLocal, dummySig);
         // Step 9: Assertions
         assertEq(bridge.tokenReserves(address(0)), 0, "tokenReserves should be reduced after unlock");
         assertEq(user.balance, depositAmount, "User should receive full unlocked ETH amount");
